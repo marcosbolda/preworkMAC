@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Vili · Facturación automática MP</title>
+<style>
+html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#2f49cf}
+canvas{position:absolute;left:0;top:0;width:1080px;height:1920px}
+#hud{position:absolute;right:14px;bottom:10px;font:22px monospace;color:#ff0;display:none}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="hud"></div>
+<script src="font.js"></script>
+<script src="motion.js"></script>
+<script>
+// Vili · "Un día en un plano" — 9:16, 18 s. Every value is a pure function of t.
+const W=1080, H=1920, DUR=18;
+const {clamp, lerp, sstep, ssstep, spring} = OM;
+const E = OM.ease;
+window.__meta = { dur: DUR, fps: 30, w: W, h: H, cuts: [14.6, 14.9, 15.15, 15.45],
+  inFrame: { phone: [2.6, 10.8, 'whole'], logo: [16.2, 18, 'whole'] } };
+
+// ── palette (from the vilimonotributo feed) ──
+const C = { dayTop:[44,64,196], dayBot:[74,114,230], nightTop:[16,22,92], nightBot:[34,48,150],
+  coral:'#f2876f', white:'#ffffff', navy:'#14206e', ink:'#1b2340', grey:'#7a819c', screen:'#eef1fb',
+  mp:'#00a6e8', green:'#1fb57a', line:'rgba(150,180,255,0.22)' };
+const F = (wt, px) => `${wt} ${px}px M`;
+const money = v => '$' + Math.round(v).toLocaleString('es-AR');
+
+// ── the day ──
+const PAY = [
+  { t: 2.75, clock: '09:12', amt: 25800,  who: 'Lucía Fernández',     tipo: 'B', n: 128 },
+  { t: 5.75, clock: '11:40', amt: 142000, who: 'Estudio Rivas SRL',   tipo: 'A', n: 129 },
+  { t: 6.45, clock: '13:05', amt: 8500,   who: 'Martín Gómez',        tipo: 'B', n: 130 },
+  { t: 7.05, clock: '15:03', amt: 61300,  who: 'Panadería Sol SA',    tipo: 'A', n: 131 },
+  { t: 7.55, clock: '16:22', amt: 19990,  who: 'Carla Ruiz',          tipo: 'B', n: 132 },
+  { t: 7.95, clock: '17:48', amt: 230000, who: 'Distribuidora Norte', tipo: 'A', n: 133 },
+  { t: 8.30, clock: '19:10', amt: 12400,  who: 'Juan Pérez',          tipo: 'B', n: 134 },
+  { t: 8.60, clock: '20:35', amt: 47650,  who: 'Ana Torres',          tipo: 'B', n: 135 },
+];
+PAY.forEach((p, i) => { p.flip = i === 0 ? 3.75 : p.t + Math.max(0.16, 0.3 - i * 0.02); p.fdur = i === 0 ? 0.3 : 0.16; p.trace = i === 0 ? 3.3 : p.t + 0.04; p.tdur = i === 0 ? 0.42 : p.flip - p.trace; });
+const TOTAL = PAY.reduce((s, p) => s + p.amt, 0);
+const NIGHT = 9.3, GATHER = 9.35, SUMFLIP = 9.6;
+const SPLIT = 10.9, SPLIT_END = 11.65;
+const HEAD = 11.15, SUB = 12.05, PILL = 12.55;
+const HITS = [[14.6, 'PROBALA'], [14.9, 'SIN'], [15.15, 'CARGO']], END = 15.45;
+
+// ── phone geometry (world = screen at zoom 1) ──
+const PH = { x: 280, y: 640, w: 520, h: 1060, r: 74 };
+const CARD = { x: 316, w: 448, h: 150, top: 905 };
+
+// ── camera ──
+let KEYS;
+function buildKeys() {
+  KEYS = [
+    { t: 0, x: 540, y: 640, zoom: 1.16 },
+    { t: 1.85, x: 540, y: 640, zoom: 1.16 },
+    { t: 2.55, x: 540, y: 1000, zoom: 1.55, curve: E.expoInOut },
+    { t: 4.05, x: 540, y: 990, zoom: 1.63, curve: E.sineInOut },
+    { t: 5.3, x: 540, y: 990, zoom: 1.63 },
+    { t: 6.0, x: 540, y: 1000, zoom: 1.0, curve: E.expoInOut },
+    { t: 9.3, x: 540, y: 1000, zoom: 1.0 },
+    { t: 9.9, x: 540, y: 1030, zoom: 1.1, curve: E.cubicInOut },
+    { t: SPLIT, x: 540, y: 1030, zoom: 1.1 },
+    { t: SPLIT_END, x: 540, y: 960, zoom: 1.0, curve: E.expoInOut },
+  ];
+}
+const SHAKES = [[2.75, 5, 9], [4.05, 7, 8], ...PAY.slice(1).map(p => [p.t, 3, 10]), [SUMFLIP + 0.12, 6, 8], [HEAD + 0.25, 4, 9]];
+const handEnv = t => (OM.sstep(2.6, 2.9, t) * (1 - OM.sstep(3.9, 4.05, t))) + (OM.sstep(6.0, 6.3, t) * (1 - OM.sstep(9.0, 9.3, t)));
+function camAt(t) {
+  const c = OM.camera(t, KEYS, { W, H }), e = handEnv(t) * 3.2;
+  let x = c.x + e * (Math.sin(1.7 * t) + 0.6 * Math.sin(2.9 * t + 1)) / c.zoom;
+  let y = c.y + e * (Math.sin(1.3 * t + 2) + 0.5 * Math.sin(3.3 * t)) / c.zoom;
+  let rot = c.rot;
+  for (const [th, amp, decay] of SHAKES) { const s = OM.shake(t, th, { amp, decay, seed: Math.round(th * 100) }); x += s.x / c.zoom; y += s.y / c.zoom; rot += s.rot * 0.5; }
+  return { x, y, zoom: c.zoom, rot };
+}
+
+// ── canvas ──
+const cv = document.getElementById('cv'); let g, DPR = 1;
+function setup() { DPR = window.devicePixelRatio || 1; cv.width = W * DPR; cv.height = H * DPR; g = cv.getContext('2d'); }
+const mat = M => g.setTransform(M[0] * DPR, M[1] * DPR, M[2] * DPR, M[3] * DPR, M[4] * DPR, M[5] * DPR);
+function rr(x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+function txt(s, x, y, px, wt, col, align = 'left', ls = 0) { g.font = F(wt, px); g.fillStyle = col; g.textAlign = align; g.textBaseline = 'alphabetic'; g.letterSpacing = ls + 'px'; g.fillText(s, x, y); g.letterSpacing = '0px'; }
+const mix = (a, b, k) => `rgb(${a.map((v, i) => Math.round(lerp(v, b[i], k))).join(',')})`;
+
+// fixed grain against banding
+let GRAIN;
+function makeGrain() { GRAIN = document.createElement('canvas'); GRAIN.width = GRAIN.height = 256; const x = GRAIN.getContext('2d'), d = x.createImageData(256, 256), r = OM.rng(11);
+  for (let i = 0; i < d.data.length; i += 4) { const w = r() < 0.5 ? 255 : 0; d.data[i] = d.data[i + 1] = d.data[i + 2] = w; d.data[i + 3] = Math.floor(r() * 7); } x.putImageData(d, 0, 0); }
+
+// ── the brand: robot + wordmark (redrawn from the feed) ──
+function robot(cx, cy, r, col, bg) {
+  g.save(); g.strokeStyle = col; g.fillStyle = col; g.lineCap = 'round'; g.lineWidth = r * 0.17;
+  g.beginPath(); g.arc(cx, cy + r * 0.08, r * 0.82, 0, Math.PI * 2); g.stroke();
+  g.beginPath(); g.arc(cx, cy + r * 0.08, r * 1.08, Math.PI * 1.12, Math.PI * 1.88); g.stroke();
+  rr(cx - r * 1.2, cy - r * 0.18, r * 0.3, r * 0.56, r * 0.12); g.fill(); rr(cx + r * 0.9, cy - r * 0.18, r * 0.3, r * 0.56, r * 0.12); g.fill();
+  rr(cx - r * 0.52, cy - r * 0.16, r * 1.04, r * 0.5, r * 0.25); g.fill();
+  g.fillStyle = bg; g.beginPath(); g.arc(cx - r * 0.22, cy + r * 0.09, r * 0.1, 0, Math.PI * 2); g.arc(cx + r * 0.22, cy + r * 0.09, r * 0.1, 0, Math.PI * 2); g.fill();
+  g.restore();
+}
+function wordmark(cx, cy, h, col, drops) {   // V I L I as strokes; drops[i] = {y, sx, sy, op}
+  const sw = h * 0.13, gap = h * 0.36, ws = [h * 0.78, 0, h * 0.5, 0];
+  const total = ws.reduce((s, w) => s + w, 0) + gap * 3; let x = cx - total / 2;
+  g.save(); g.strokeStyle = col; g.lineWidth = sw; g.lineCap = 'round'; g.lineJoin = 'round';
+  ws.forEach((w, i) => { const d = drops ? drops[i] : { y: 0, sx: 1, sy: 1, op: 1 };
+    g.save(); g.globalAlpha *= d.op; g.translate(x + w / 2, cy + h / 2 + d.y); g.scale(d.sx, d.sy); g.translate(-(x + w / 2), -(cy + h / 2));
+    g.beginPath();
+    if (i === 0) { g.moveTo(x, cy); g.lineTo(x + w / 2, cy + h); g.lineTo(x + w, cy); }
+    else if (i === 2) { g.moveTo(x, cy); g.lineTo(x, cy + h); g.lineTo(x + w, cy + h); }
+    else { g.moveTo(x, cy + h * 0.32); g.lineTo(x, cy + h); }
+    g.stroke(); g.restore(); x += w + gap; });
+  g.restore();
+}
+
+// ── background ──
+function ground(t) {
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const nk = sstep(5.6, NIGHT, t) * (1 - sstep(SPLIT, SPLIT_END + 0.3, t));
+  const gr = g.createLinearGradient(0, 0, W * 0.4, H);
+  gr.addColorStop(0, mix(C.dayTop, C.nightTop, nk)); gr.addColorStop(1, mix(C.dayBot, C.nightBot, nk));
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  return nk;
+}
+function waves(cam) {   // the feed's flowing lines, on a far layer
+  mat(OM.view(cam, { W, H, depth: 0.7 }));
+  g.strokeStyle = C.line; g.lineWidth = 2.2;
+  for (let i = 0; i < 14; i++) {
+    g.beginPath();
+    for (let x = -700; x <= W + 700; x += 20) {
+      const y = 1500 + i * 34 + 160 * Math.sin(x / 330 + i * 0.16) + 70 * Math.sin(x / 140 - i * 0.3);
+      x === -700 ? g.moveTo(x, y) : g.lineTo(x, y);
+    }
+    g.stroke();
+  }
+  for (let i = 0; i < 10; i++) {
+    g.beginPath();
+    for (let x = -700; x <= W + 700; x += 20) {
+      const y = -260 + i * 30 + 120 * Math.sin(x / 280 - i * 0.2 + 2) + 50 * Math.sin(x / 120 + i * 0.25);
+      x === -700 ? g.moveTo(x, y) : g.lineTo(x, y);
+    }
+    g.stroke();
+  }
+}
+
+// ── cards on the phone ──
+// slot of card i at t: how many later payments have arrived (spring-fractional)
+function slotOf(i, t) { let s = 0; for (let k = i + 1; k < PAY.length; k++) s += spring(t - PAY[k].t, 0.72, 17); return s; }
+function cardPose(i, t) {
+  const p = PAY[i], s = slotOf(i, t);
+  let y = s <= 3 ? CARD.top + s * 168 : CARD.top + 3 * 168 + (s - 3) * 16;
+  let sc = 1 - Math.max(0, s - 3) * 0.045, op = s <= 3 ? 1 : clamp(1 - (s - 3) * 0.3, 0, 1);
+  const pin = OM.popIn(t, p.t, { zeta: 0.6, omega: 19, rise: -70, s0: 0.9, ds: 0.1 });
+  y += pin.dy; sc *= pin.s; op *= pin.op;
+  // gather into the summary
+  const gk = E.expoOut(OM.seg(t, GATHER + (PAY.length - 1 - i) * 0.025, GATHER + 0.45 + (PAY.length - 1 - i) * 0.025));
+  y = lerp(y, CARD.top, gk); if (i < PAY.length - 1) op *= 1 - sstep(0.55, 1, gk);
+  return { y, sc, op, s, vis: t >= p.t - 0.02 };
+}
+function flipK(i, t) { const p = PAY[i]; return OM.seg(t, p.flip, p.flip + p.fdur); }
+function drawCard(i, t) {
+  const p = PAY[i], q = cardPose(i, t); if (!q.vis || q.op <= 0.003) return;
+  const last = i === PAY.length - 1, fk = flipK(i, t), sk = last ? OM.seg(t, SUMFLIP, SUMFLIP + 0.28) : 0;
+  const k = sk > 0 ? sk : fk;                       // the card turns over on its horizontal axis
+  const face = sk > 0 ? (sk < 0.5 ? 'inv' : 'sum') : (fk < 0.5 ? 'mp' : 'inv');
+  const sy = Math.abs(Math.cos(Math.PI * k));
+  const x = CARD.x, w = CARD.w, h = CARD.h, cx = x + w / 2, cy = q.y + h / 2;
+  g.save(); g.globalAlpha = q.op; g.translate(cx, cy); g.scale(q.sc, q.sc * Math.max(0.02, sy));
+  // landing of the flipped face
+  const im = face !== 'mp' ? OM.impact(t, face === 'sum' ? SUMFLIP + 0.28 : p.flip + p.fdur, { decay: 8, omega: 24, sqx: 0.05, sqy: 0.07 }) : { sx: 1, sy: 1 };
+  g.scale(im.sx, im.sy); g.translate(-cx, -cy);
+  g.shadowColor = 'rgba(20,30,90,0.18)'; g.shadowBlur = 24 * DPR; g.shadowOffsetY = 8 * DPR;
+  g.fillStyle = '#fff'; rr(x, q.y, w, h, 30); g.fill(); g.shadowColor = 'transparent';
+  g.globalAlpha *= clamp(1 - (q.s - 3) * 1.6, 0, 1);
+  if (face === 'mp') {
+    g.fillStyle = C.mp; g.beginPath(); g.arc(x + 56, q.y + 52, 26, 0, Math.PI * 2); g.fill();
+    txt('$', x + 56, q.y + 63, 30, 800, '#fff', 'center');
+    txt('Mercado Pago', x + 98, q.y + 50, 22, 700, C.ink); txt('ahora', x + w - 26, q.y + 50, 20, 500, C.grey, 'right');
+    txt('Recibiste ' + money(p.amt), x + 98, q.y + 92, 30, 800, C.ink);
+    txt('de ' + p.who, x + 98, q.y + 126, 22, 500, C.grey);
+  } else if (face === 'inv') {
+    g.fillStyle = C.navy; g.beginPath(); g.arc(x + 56, q.y + 52, 28, 0, Math.PI * 2); g.fill(); robot(x + 56, q.y + 52, 15, '#fff', C.navy);
+    txt('Vili · Factura ' + p.tipo, x + 98, q.y + 50, 22, 700, C.ink);
+    txt(money(p.amt), x + 98, q.y + 92, 30, 800, C.ink);
+    txt('N° 0003-' + String(p.n).padStart(8, '0') + ' · CAE', x + 98, q.y + 126, 20, 500, C.grey);
+    // check
+    const ck = OM.tick(t, p.flip + p.fdur + 0.02);
+    g.save(); g.translate(x + w - 52, q.y + 75); g.scale(ck.s, ck.s);
+    g.fillStyle = C.green; g.beginPath(); g.arc(0, 0, 24, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#fff'; g.lineWidth = 5; g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath(); g.moveTo(-10, 1); g.lineTo(-3, 9); g.lineTo(11, -8); g.stroke(); g.restore();
+  } else {
+    g.fillStyle = C.navy; g.beginPath(); g.arc(x + 56, q.y + 52, 28, 0, Math.PI * 2); g.fill(); robot(x + 56, q.y + 52, 15, '#fff', C.navy);
+    txt('Hoy · ' + PAY.length + ' facturas emitidas', x + 98, q.y + 50, 22, 700, C.ink);
+    txt(money(TOTAL), x + 98, q.y + 94, 34, 800, C.ink);
+    txt('0 pendientes', x + 98, q.y + 128, 22, 600, C.green);
+    g.save(); g.translate(x + w - 52, q.y + 75); g.fillStyle = C.green; g.beginPath(); g.arc(0, 0, 24, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#fff'; g.lineWidth = 5; g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath(); g.moveTo(-10, 1); g.lineTo(-3, 9); g.lineTo(11, -8); g.stroke(); g.restore();
+  }
+  g.restore();
+  // Vili at work: a coral line runs around the payment before it turns
+  const tk = OM.seg(t, p.trace, p.trace + p.tdur);
+  if (tk > 0 && tk < 1 && face === 'mp') {
+    g.save(); g.globalAlpha = q.op; g.strokeStyle = C.coral; g.lineWidth = 5; g.lineCap = 'round';
+    const per = 2 * (w + h) - 8 * 30 + 2 * Math.PI * 30; rr(x, q.y, w, h, 30);
+    const a = E.cubicOut(tk); g.setLineDash([per * a, per]); g.lineDashOffset = 0; g.stroke(); g.setLineDash([]); g.restore();
+  }
+}
+function clockAt(t) { let c = '09:11'; for (const p of PAY) if (t >= p.t) c = p.clock; if (t >= NIGHT) c = '21:30'; return c; }
+function clockChange(t) { let last = -9; for (const p of PAY) if (t >= p.t) last = p.t; if (t >= NIGHT) last = NIGHT; return last; }
+
+// phone transform for the split (phone slides down and shrinks under the headline)
+function phoneT(t) {
+  const k = E.expoInOut(OM.seg(t, SPLIT, SPLIT_END));
+  const s = lerp(1, 0.56, k), cy0 = PH.y + PH.h / 2, cy = lerp(cy0, 1585, k);
+  return { s, dy: cy - cy0 * s, cx: 540 };    // world point (x,y) → (540 + (x-540)*s, y*s + dy)
+}
+function drawPhone(t, nk) {
+  const pt = phoneT(t);
+  g.save(); g.translate(pt.cx, pt.dy); g.scale(pt.s, pt.s); g.translate(-pt.cx, 0);
+  g.shadowColor = 'rgba(5,10,50,0.45)'; g.shadowBlur = 70 * DPR * pt.s; g.shadowOffsetY = 30 * DPR * pt.s;
+  g.fillStyle = '#0d1236'; rr(PH.x, PH.y, PH.w, PH.h, PH.r); g.fill(); g.shadowColor = 'transparent';
+  const sx = PH.x + 16, sy = PH.y + 16, sw = PH.w - 32, sh = PH.h - 32;
+  g.save(); rr(sx, sy, sw, sh, PH.r - 16); g.clip();
+  const sg = g.createLinearGradient(0, sy, 0, sy + sh); sg.addColorStop(0, '#f4f6fe'); sg.addColorStop(1, '#dfe5fb'); g.fillStyle = sg; g.fillRect(sx, sy, sw, sh);
+  // notch
+  g.fillStyle = '#0d1236'; rr(540 - 70, sy + 14, 140, 34, 17); g.fill();
+  // lock screen
+  txt('martes 14 de octubre', 540, sy + 112, 24, 600, C.grey, 'center');
+  const ct = clockChange(t), w = OM.wordRise(t, ct, { zeta: 0.55, omega: 26, dist: 18 });
+  g.save(); g.globalAlpha = ct < 0 ? 1 : w.op; txt(clockAt(t), 540, sy + 214 + (ct < 0 ? 0 : w.y), 112, 700, C.navy, 'center'); g.restore();
+  for (let i = 0; i < PAY.length; i++) drawCard(i, t);
+  // home bar
+  g.fillStyle = 'rgba(20,32,110,0.35)'; rr(540 - 80, sy + sh - 22, 160, 7, 4); g.fill();
+  g.restore(); g.restore();
+  return pt;
+}
+
+// ── seek ──
+let CAM, TRACK = {};
+function seek(t) {
+  const nk = ground(t);
+  CAM = camAt(t);
+  waves(CAM);
+  const VIEW = OM.view(CAM, { W, H }); mat(VIEW);
+  const endOn = t >= END, hitOn = t >= HITS[0][0] && t < END;
+
+  if (!endOn && !hitOn) {
+    // hook words
+    if (t < 2.4) {
+      const lo = OM.liftOut(t, 1.85, { dur: 0.35, dist: 90 });
+      g.save(); g.globalAlpha = lo.op; g.translate(0, lo.dy);
+      const L = [[0.15, '¿Sos Responsable', 330, 70, 800, C.white], [0.45, 'Inscripto', 420, 70, 800, C.coral], [1.0, 'y cobrás con', 520, 46, 600, C.white], [1.2, 'Mercado Pago?', 578, 46, 600, C.white]];
+      for (const [t0, s, y, px, wt, col] of L) { const w = OM.wordRise(t, t0, { dist: 34 }); g.save(); g.globalAlpha *= w.op; g.translate(540, y + w.y); g.scale(w.s, w.s); txt(s, 0, 0, px, wt, col, 'center'); g.restore(); }
+      g.restore();
+    }
+    // counter + caption over the phone
+    if (t >= 4.0 && t < SPLIT + 0.4) {
+      const lo = OM.liftOut(t, SPLIT, { dur: 0.3, dist: 80 });
+      g.save(); g.globalAlpha = lo.op; g.translate(0, lo.dy);
+      const cw = OM.wordRise(t, 4.1, { dist: 30 });
+      const swap = OM.seg(t, SUMFLIP + 0.05, SUMFLIP + 0.3);
+      g.save(); g.beginPath(); g.rect(0, 490, W, 100); g.clip();
+      g.save(); g.globalAlpha *= cw.op; g.translate(540, 565 + cw.y - E.cubicInOut(swap) * 90); txt('Cada cobro se factura solo.', 0, 0, 46, 700, C.white, 'center'); g.restore();
+      if (swap > 0) { g.save(); g.translate(540, 565 + 90 * (1 - E.expoOut(swap))); txt('Todo facturado. Sin tocar nada.', 0, 0, 46, 700, C.white, 'center'); g.restore(); }
+      g.restore();
+      // counter
+      const ci = OM.popIn(t, 5.55, { rise: 30 });
+      if (t >= 5.5) {
+        let v = 0, lastT = -9; for (const p of PAY) if (t >= p.t) { v += p.amt; lastT = p.t; }
+        const prev = v - (PAY.find(p => p.t === lastT)?.amt || 0); const vk = E.expoOut(OM.seg(t, lastT, lastT + 0.35));
+        const shown = lastT === PAY[0].t ? v : lerp(prev, v, vk);
+        g.save(); g.globalAlpha *= ci.op; g.translate(540, ci.dy);
+        txt('FACTURADO HOY', 0, 300, 28, 700, 'rgba(255,255,255,0.75)', 'center', 4);
+        const bump = OM.impact(t, lastT + 0.05, { decay: 9, omega: 26, sqx: 0.04, sqy: 0.05 });
+        g.save(); g.translate(0, 420); g.scale(bump.sx, bump.sy); txt(money(shown), 0, 0, 112, 800, C.white, 'center'); g.restore();
+        g.restore();
+      }
+      g.restore();
+    }
+    // the call
+    if (t >= HEAD - 0.05) {
+      const L = [[HEAD, 'Buscamos', 470, 64, 600, C.white], [HEAD + 0.13, 'Responsables', 590, 104, 800, C.white], [HEAD + 0.26, 'Inscriptos', 700, 104, 800, C.coral]];
+      L.forEach(([t0, s, y, px, wt, col]) => { const m = OM.maskRise(t, t0, 0, { dist: px * 1.1 }); g.save(); g.beginPath(); g.rect(0, y - px * 1.05, W, px * 1.3); g.clip(); txt(s, 540, y + m.y, px, wt, col, 'center'); g.restore(); });
+      [[SUB, 'que quieran probar gratis', 820], [SUB + 0.12, 'por un tiempo nuestra nueva herramienta', 876]].forEach(([t0, s, y]) => { const w = OM.wordRise(t, t0, { dist: 24 }); g.save(); g.globalAlpha = w.op; g.translate(540, y + w.y); g.scale(w.s, w.s); txt(s, 0, 0, 38, 500, C.white, 'center'); g.restore(); });
+      const pi = OM.popIn(t, PILL, { rise: 24, s0: 0.85, ds: 0.15 });
+      if (t >= PILL) { g.save(); g.globalAlpha = pi.op; g.translate(540, 990 + pi.dy); g.scale(pi.s, pi.s);
+        g.font = F(700, 32); const tw = g.measureText('Facturación automática de Mercado Pago').width + 70;
+        g.fillStyle = C.coral; rr(-tw / 2, -38, tw, 76, 38); g.fill(); txt('Facturación automática de Mercado Pago', 0, 11, 32, 700, C.white, 'center'); g.restore(); }
+    }
+    const pt = drawPhone(t, nk);
+    const pb = { x: 540 + (PH.x - 540) * pt.s, y: PH.y * pt.s + pt.dy, w: PH.w * pt.s, h: PH.h * pt.s, op: 1 };
+    TRACK = { phone: OM.projectBox(VIEW, pb), card: OM.projectBox(VIEW, { x: CARD.x, y: CARD.top, w: CARD.w, h: CARD.h, op: 1 }) };
+  }
+  if (hitOn) {      // staccato hits on coral
+    g.setTransform(DPR, 0, 0, DPR, 0, 0); g.fillStyle = C.coral; g.fillRect(0, 0, W, H);
+    const h = OM.staccato(t, HITS); const i = h.i, t0 = HITS[Math.max(0, i)][0];
+    const im = OM.impact(t, t0, { decay: 10, omega: 28, sqx: 0.06, sqy: 0.08 });
+    g.save(); g.translate(540, 1010); g.scale(im.sx, im.sy); txt(h.word, 0, 0, 170, 900, C.white, 'center', 2); g.restore();
+    TRACK = { word: { x: 140, y: 860, w: 800, h: 190, op: 1 } };
+  }
+  if (endOn) {      // end card on the brand ground
+    g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const gr = g.createLinearGradient(0, 0, W * 0.4, H); gr.addColorStop(0, mix(C.dayTop, C.dayTop, 0)); gr.addColorStop(1, mix(C.dayBot, C.dayBot, 0)); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    waves({ x: 540, y: 960, zoom: 1, rot: 0 }); g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const ri = OM.popIn(t, END + 0.02, { rise: 40, s0: 0.7, ds: 0.3, zeta: 0.5 });
+    g.save(); g.globalAlpha = ri.op; g.translate(540, 700 + ri.dy); g.scale(ri.s, ri.s); robot(0, 0, 92, '#fff', C.dayTop.length ? mix(C.dayTop, C.dayBot, 0.35) : '#2f49cf'); g.restore();
+    const drops = [0, 1, 2, 3].map(i => { const d = OM.letterDrop(t, END + 0.22, i, { dist: 60 }); return { y: d.y, sx: d.sx, sy: d.sy, op: d.op }; });
+    wordmark(540, 850, 110, '#fff', drops);
+    const a = OM.wordRise(t, 16.15, { dist: 28 }), b = OM.wordRise(t, 16.3, { dist: 28 }), c = OM.wordRise(t, 16.6, { dist: 24 });
+    g.save(); g.globalAlpha = a.op; txt('Escribinos por DM', 540, 1150 + a.y, 52, 800, C.white, 'center'); g.restore();
+    g.save(); g.globalAlpha = b.op; txt('y sumate a la prueba sin cargo', 540, 1218 + b.y, 40, 500, C.white, 'center'); g.restore();
+    g.save(); g.globalAlpha = c.op; txt('www.vili.com.ar', 540, 1400 + c.y, 40, 600, 'rgba(255,255,255,0.9)', 'center', 1); g.restore();
+    TRACK = { logo: { x: 380, y: 590, w: 320, h: 380, op: 1 } };
+  }
+  // grain
+  g.setTransform(DPR, 0, 0, DPR, 0, 0); g.globalAlpha = 1; g.fillStyle = g.createPattern(GRAIN, 'repeat'); g.fillRect(0, 0, W, H);
+  document.getElementById('hud').textContent = 't=' + t.toFixed(3);
+}
+
+// sound cues for the score
+window.__events = () => {
+  const ev = [];
+  PAY.forEach((p, i) => { ev.push({ t: p.t, kind: 'pay', i, x: 540 }); ev.push({ t: p.flip + p.fdur, kind: 'invoice', i, x: 540 }); });
+  ev.push({ t: 1.85, kind: 'whoosh' }, { t: 5.3, kind: 'whoosh_out' }, { t: SUMFLIP + 0.28, kind: 'summary' }, { t: SPLIT, kind: 'whoosh_out' }, { t: HEAD, kind: 'head' }, { t: PILL, kind: 'pill' });
+  HITS.forEach(([t]) => ev.push({ t, kind: 'hit' })); ev.push({ t: END + 0.02, kind: 'logo' }); [0, 1, 2, 3].forEach(i => ev.push({ t: END + 0.22 + i * 0.055 + 0.08, kind: 'letter', i }));
+  return ev.sort((a, b) => a.t - b.t);
+};
+window.__track = t => { seek(t); return TRACK; };
+window.__motion = (t0, t1) => {
+  const c0 = camAt(t0), c1 = camAt(t1), cm = camAt((t0 + t1) / 2);
+  let d = OM.screenTravel(c0, c1, cm, { W, H });
+  seek(t0); const A = TRACK; seek(t1); const B = TRACK;
+  for (const k in A) if (B[k]) d = Math.max(d, Math.abs(A[k].x - B[k].x), Math.abs(A[k].y - B[k].y), Math.abs(A[k].x + A[k].w - B[k].x - B[k].w), Math.abs(A[k].y + A[k].h - B[k].y - B[k].h));
+  // cards travel inside the phone
+  let cmax = 0; for (let i = 0; i < PAY.length; i++) { const a = cardPose(i, t0), b = cardPose(i, t1); cmax = Math.max(cmax, Math.abs(a.y - b.y) * c1.zoom); }
+  return Math.max(d, cmax);
+};
+window.__seek = async t => { seek(t); return true; };
+const face = new FontFace('M', Uint8Array.from(atob(window.FONT_B64), ch => ch.charCodeAt(0)).buffer, { weight: '100 900' });
+document.fonts.add(face);
+window.__ready = face.load().then(() => document.fonts.ready).then(() => { setup(); makeGrain(); buildKeys(); seek(0); return true; });
+const q = new URLSearchParams(location.search);
+if (q.has('hud')) document.getElementById('hud').style.display = 'block';
+if (q.has('t')) __ready.then(() => seek(parseFloat(q.get('t'))));
+if (q.has('play')) __ready.then(() => { const t0 = performance.now(); (function loop() { seek(((performance.now() - t0) / 1000) % DUR); requestAnimationFrame(loop); })(); });
+</script>
+</body>
+</html>
