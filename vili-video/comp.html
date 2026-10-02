@@ -20,8 +20,8 @@ canvas{position:absolute;left:0;top:0;width:1080px;height:1920px}
 const W=1080, H=1920, DUR=18;
 const {clamp, lerp, sstep, ssstep, spring} = OM;
 const E = OM.ease;
-window.__meta = { dur: DUR, fps: 30, w: W, h: H, cuts: [14.6, 14.9, 15.15, 15.45],
-  inFrame: { card: [3.0, 10.8, 'whole'], logo: [16.2, 18, 'whole'] } };
+window.__meta = { dur: DUR, fps: 30, w: W, h: H, cuts: [14.6, 14.9, 15.2, 15.45, 15.75],
+  inFrame: { card: [3.0, 10.8, 'whole'], logo: [16.5, 18, 'whole'] } };
 
 // ── palette (from the vilimonotributo feed) ──
 const C = { dayTop:[44,64,196], dayBot:[74,114,230], nightTop:[16,22,92], nightBot:[34,48,150],
@@ -49,7 +49,7 @@ const TOTAL = PAY.reduce((s, p) => s + p.amt, 0);
 const NIGHT = 9.3, GATHER = 9.35, SUMFLIP = 9.6;
 const SPLIT = 10.9, SPLIT_END = 11.65;
 const HEAD = 11.15, SUB = 12.05, PILL = 12.55;
-const HITS = [[14.6, 'PROBALA'], [14.9, 'SIN'], [15.15, 'CARGO']], END = 15.45;
+const HITS = [[14.6, 'PROBALA'], [14.9, 'SIN CARGO'], [15.2, 'POR TIEMPO'], [15.45, 'LIMITADO']], END = 15.75;
 
 // ── phone geometry (world = screen at zoom 1) ──
 const PH = { x: 280, y: 640, w: 520, h: 1060, r: 74 };
@@ -321,7 +321,7 @@ function seek(t) {
     g.setTransform(DPR, 0, 0, DPR, 0, 0); g.fillStyle = C.coral; g.fillRect(0, 0, W, H);
     const h = OM.staccato(t, HITS); const i = h.i, t0 = HITS[Math.max(0, i)][0];
     const im = OM.impact(t, t0, { decay: 10, omega: 28, sqx: 0.06, sqy: 0.08 });
-    g.save(); g.translate(540, 1010); g.scale(im.sx, im.sy); txt(h.word, 0, 0, 170, 900, C.white, 'center', 2); g.restore();
+    g.save(); g.translate(540, 1010); g.scale(im.sx, im.sy); g.font = F(900, 170); const fit = Math.min(170, 170 * 940 / (g.measureText(h.word).width + 2 * h.word.length)); txt(h.word, 0, 0, fit, 900, C.white, 'center', 2); g.restore();
     TRACK = { word: { x: 140, y: 860, w: 800, h: 190, op: 1 } };
   }
   if (endOn) {      // end card on the brand ground
@@ -330,10 +330,12 @@ function seek(t) {
     waves({ x: 540, y: 960, zoom: 1, rot: 0 }); g.setTransform(DPR, 0, 0, DPR, 0, 0);
     logoLockup(t, 540, 520, 520);
 
-    const a = OM.wordRise(t, 16.15, { dist: 28 }), b = OM.wordRise(t, 16.3, { dist: 28 }), c = OM.wordRise(t, 16.6, { dist: 24 });
+    const a = OM.wordRise(t, 16.45, { dist: 28 }), b = OM.wordRise(t, 16.6, { dist: 28 }), c = OM.wordRise(t, 17.0, { dist: 24 }), pl = OM.popIn(t, 16.8, { rise: 24, s0: 0.85, ds: 0.15 });
     g.save(); g.globalAlpha = a.op; txt('Escribinos por DM', 540, 1120 + a.y, 52, 800, C.white, 'center'); g.restore();
-    g.save(); g.globalAlpha = b.op; txt('y sumate a la prueba sin cargo', 540, 1188 + b.y, 40, 500, C.white, 'center'); g.restore();
-    g.save(); g.globalAlpha = c.op; txt('www.vili.com.ar', 540, 1360 + c.y, 40, 600, 'rgba(255,255,255,0.9)', 'center', 1); g.restore();
+    g.save(); g.globalAlpha = b.op; txt('y sumate a la prueba', 540, 1188 + b.y, 40, 500, C.white, 'center'); g.restore();
+    if (t >= 16.8) { g.save(); g.globalAlpha = pl.op; g.translate(540, 1290 + pl.dy); g.scale(pl.s, pl.s); g.font = F(700, 34); const pw = g.measureText('Sin cargo por tiempo limitado').width + 70;
+      g.fillStyle = C.coral; rr(-pw / 2, -40, pw, 80, 40); g.fill(); txt('Sin cargo por tiempo limitado', 0, 12, 34, 700, C.white, 'center'); g.restore(); }
+    g.save(); g.globalAlpha = c.op; txt('www.vili.com.ar', 540, 1420 + c.y, 40, 600, 'rgba(255,255,255,0.9)', 'center', 1); g.restore();
     TRACK = { logo: { x: 280, y: 520, w: 520, h: 455, op: 1 } };
   }
   // grain
