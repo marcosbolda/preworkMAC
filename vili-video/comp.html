@@ -13,6 +13,7 @@ canvas{position:absolute;left:0;top:0;width:1080px;height:1920px}
 <canvas id="cv"></canvas>
 <div id="hud"></div>
 <script src="font.js"></script>
+<script src="logo.js"></script>
 <script src="motion.js"></script>
 <script>
 // Vili · "Un día en un plano" — 9:16, 18 s. Every value is a pure function of t.
@@ -92,27 +93,21 @@ function makeGrain() { GRAIN = document.createElement('canvas'); GRAIN.width = G
   for (let i = 0; i < d.data.length; i += 4) { const w = r() < 0.5 ? 255 : 0; d.data[i] = d.data[i + 1] = d.data[i + 2] = w; d.data[i + 3] = Math.floor(r() * 7); } x.putImageData(d, 0, 0); }
 
 // ── the brand: robot + wordmark (redrawn from the feed) ──
-function robot(cx, cy, r, col, bg) {
-  g.save(); g.strokeStyle = col; g.fillStyle = col; g.lineCap = 'round'; g.lineWidth = r * 0.17;
-  g.beginPath(); g.arc(cx, cy + r * 0.08, r * 0.82, 0, Math.PI * 2); g.stroke();
-  g.beginPath(); g.arc(cx, cy + r * 0.08, r * 1.08, Math.PI * 1.12, Math.PI * 1.88); g.stroke();
-  rr(cx - r * 1.2, cy - r * 0.18, r * 0.3, r * 0.56, r * 0.12); g.fill(); rr(cx + r * 0.9, cy - r * 0.18, r * 0.3, r * 0.56, r * 0.12); g.fill();
-  rr(cx - r * 0.52, cy - r * 0.16, r * 1.04, r * 0.5, r * 0.25); g.fill();
-  g.fillStyle = bg; g.beginPath(); g.arc(cx - r * 0.22, cy + r * 0.09, r * 0.1, 0, Math.PI * 2); g.arc(cx + r * 0.22, cy + r * 0.09, r * 0.1, 0, Math.PI * 2); g.fill();
-  g.restore();
-}
-function wordmark(cx, cy, h, col, drops) {   // V I L I as strokes; drops[i] = {y, sx, sy, op}
-  const sw = h * 0.13, gap = h * 0.36, ws = [h * 0.78, 0, h * 0.5, 0];
-  const total = ws.reduce((s, w) => s + w, 0) + gap * 3; let x = cx - total / 2;
-  g.save(); g.strokeStyle = col; g.lineWidth = sw; g.lineCap = 'round'; g.lineJoin = 'round';
-  ws.forEach((w, i) => { const d = drops ? drops[i] : { y: 0, sx: 1, sy: 1, op: 1 };
-    g.save(); g.globalAlpha *= d.op; g.translate(x + w / 2, cy + h / 2 + d.y); g.scale(d.sx, d.sy); g.translate(-(x + w / 2), -(cy + h / 2));
-    g.beginPath();
-    if (i === 0) { g.moveTo(x, cy); g.lineTo(x + w / 2, cy + h); g.lineTo(x + w, cy); }
-    else if (i === 2) { g.moveTo(x, cy); g.lineTo(x, cy + h); g.lineTo(x + w, cy + h); }
-    else { g.moveTo(x, cy + h * 0.32); g.lineTo(x, cy + h); }
-    g.stroke(); g.restore(); x += w + gap; });
-  g.restore();
+// the official logo (white on transparent): robot = rows above LOGO.split, letters = column spans below it
+const IMG = { robot: new Image(), full: new Image() };
+IMG.robot.src = 'data:image/png;base64,' + LOGO.robot; IMG.full.src = 'data:image/png;base64,' + LOGO.full;
+function robotIcon(cx, cy, h) { const w = h * IMG.robot.width / IMG.robot.height; g.drawImage(IMG.robot, cx - w / 2, cy - h / 2, w, h); }
+function logoLockup(t, cx, top, width) {   // robot pops, letters drop one by one
+  const k = width / LOGO.W, sp = LOGO.split;
+  const ri = OM.popIn(t, END + 0.02, { rise: 40, s0: 0.7, ds: 0.3, zeta: 0.5 });
+  const rw = IMG.robot.width * k, rh = IMG.robot.height * k, rcx = cx, rcy = top + rh / 2;
+  g.save(); g.globalAlpha = ri.op; g.translate(rcx, rcy + ri.dy); g.scale(ri.s, ri.s); g.drawImage(IMG.robot, -rw / 2, -rh / 2, rw, rh); g.restore();
+  LOGO.letters.forEach(([x0, x1], i) => {
+    const d = OM.letterDrop(t, END + 0.22, i, { dist: 60 }), w = (x1 - x0) * k, h = (LOGO.H - sp) * k;
+    const lx = cx - width / 2 + x0 * k, ly = top + sp * k;
+    g.save(); g.globalAlpha = d.op; g.translate(lx + w / 2, ly + h + d.y); g.scale(d.sx, d.sy);
+    g.drawImage(IMG.full, x0, sp, x1 - x0, LOGO.H - sp, -w / 2, -h, w, h); g.restore();
+  });
 }
 
 // ── background ──
@@ -181,7 +176,7 @@ function drawCard(i, t) {
     txt('Recibiste ' + money(p.amt), x + 98, q.y + 92, 30, 800, C.ink);
     txt('de ' + p.who, x + 98, q.y + 126, 22, 500, C.grey);
   } else if (face === 'inv') {
-    g.fillStyle = C.navy; g.beginPath(); g.arc(x + 56, q.y + 52, 28, 0, Math.PI * 2); g.fill(); robot(x + 56, q.y + 52, 15, '#fff', C.navy);
+    g.fillStyle = C.navy; g.beginPath(); g.arc(x + 56, q.y + 52, 28, 0, Math.PI * 2); g.fill(); robotIcon(x + 56, q.y + 51, 40);
     txt('Vili · Factura ' + p.tipo, x + 98, q.y + 50, 22, 700, C.ink);
     txt(money(p.amt), x + 98, q.y + 92, 30, 800, C.ink);
     txt('N° 0003-' + String(p.n).padStart(8, '0') + ' · CAE', x + 98, q.y + 126, 20, 500, C.grey);
@@ -191,7 +186,7 @@ function drawCard(i, t) {
     g.fillStyle = C.green; g.beginPath(); g.arc(0, 0, 24, 0, Math.PI * 2); g.fill();
     g.strokeStyle = '#fff'; g.lineWidth = 5; g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath(); g.moveTo(-10, 1); g.lineTo(-3, 9); g.lineTo(11, -8); g.stroke(); g.restore();
   } else {
-    g.fillStyle = C.navy; g.beginPath(); g.arc(x + 56, q.y + 52, 28, 0, Math.PI * 2); g.fill(); robot(x + 56, q.y + 52, 15, '#fff', C.navy);
+    g.fillStyle = C.navy; g.beginPath(); g.arc(x + 56, q.y + 52, 28, 0, Math.PI * 2); g.fill(); robotIcon(x + 56, q.y + 51, 40);
     txt('Hoy · ' + PAY.length + ' facturas emitidas', x + 98, q.y + 50, 22, 700, C.ink);
     txt(money(TOTAL), x + 98, q.y + 94, 34, 800, C.ink);
     txt('0 pendientes', x + 98, q.y + 128, 22, 600, C.green);
@@ -304,15 +299,13 @@ function seek(t) {
     g.setTransform(DPR, 0, 0, DPR, 0, 0);
     const gr = g.createLinearGradient(0, 0, W * 0.4, H); gr.addColorStop(0, mix(C.dayTop, C.dayTop, 0)); gr.addColorStop(1, mix(C.dayBot, C.dayBot, 0)); g.fillStyle = gr; g.fillRect(0, 0, W, H);
     waves({ x: 540, y: 960, zoom: 1, rot: 0 }); g.setTransform(DPR, 0, 0, DPR, 0, 0);
-    const ri = OM.popIn(t, END + 0.02, { rise: 40, s0: 0.7, ds: 0.3, zeta: 0.5 });
-    g.save(); g.globalAlpha = ri.op; g.translate(540, 700 + ri.dy); g.scale(ri.s, ri.s); robot(0, 0, 92, '#fff', C.dayTop.length ? mix(C.dayTop, C.dayBot, 0.35) : '#2f49cf'); g.restore();
-    const drops = [0, 1, 2, 3].map(i => { const d = OM.letterDrop(t, END + 0.22, i, { dist: 60 }); return { y: d.y, sx: d.sx, sy: d.sy, op: d.op }; });
-    wordmark(540, 850, 110, '#fff', drops);
+    logoLockup(t, 540, 520, 520);
+
     const a = OM.wordRise(t, 16.15, { dist: 28 }), b = OM.wordRise(t, 16.3, { dist: 28 }), c = OM.wordRise(t, 16.6, { dist: 24 });
-    g.save(); g.globalAlpha = a.op; txt('Escribinos por DM', 540, 1150 + a.y, 52, 800, C.white, 'center'); g.restore();
-    g.save(); g.globalAlpha = b.op; txt('y sumate a la prueba sin cargo', 540, 1218 + b.y, 40, 500, C.white, 'center'); g.restore();
-    g.save(); g.globalAlpha = c.op; txt('www.vili.com.ar', 540, 1400 + c.y, 40, 600, 'rgba(255,255,255,0.9)', 'center', 1); g.restore();
-    TRACK = { logo: { x: 380, y: 590, w: 320, h: 380, op: 1 } };
+    g.save(); g.globalAlpha = a.op; txt('Escribinos por DM', 540, 1120 + a.y, 52, 800, C.white, 'center'); g.restore();
+    g.save(); g.globalAlpha = b.op; txt('y sumate a la prueba sin cargo', 540, 1188 + b.y, 40, 500, C.white, 'center'); g.restore();
+    g.save(); g.globalAlpha = c.op; txt('www.vili.com.ar', 540, 1360 + c.y, 40, 600, 'rgba(255,255,255,0.9)', 'center', 1); g.restore();
+    TRACK = { logo: { x: 280, y: 520, w: 520, h: 455, op: 1 } };
   }
   // grain
   g.setTransform(DPR, 0, 0, DPR, 0, 0); g.globalAlpha = 1; g.fillStyle = g.createPattern(GRAIN, 'repeat'); g.fillRect(0, 0, W, H);
@@ -340,7 +333,7 @@ window.__motion = (t0, t1) => {
 window.__seek = async t => { seek(t); return true; };
 const face = new FontFace('M', Uint8Array.from(atob(window.FONT_B64), ch => ch.charCodeAt(0)).buffer, { weight: '100 900' });
 document.fonts.add(face);
-window.__ready = face.load().then(() => document.fonts.ready).then(() => { setup(); makeGrain(); buildKeys(); seek(0); return true; });
+window.__ready = face.load().then(() => document.fonts.ready).then(() => Promise.all([IMG.robot.decode(), IMG.full.decode()])).then(() => { setup(); makeGrain(); buildKeys(); seek(0); return true; });
 const q = new URLSearchParams(location.search);
 if (q.has('hud')) document.getElementById('hud').style.display = 'block';
 if (q.has('t')) __ready.then(() => seek(parseFloat(q.get('t'))));

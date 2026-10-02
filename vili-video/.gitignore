@@ -1,2 +1,5 @@
 _frames/
 *.render.json
+render*.log
+*-video.mp4
+logo_preview.png
