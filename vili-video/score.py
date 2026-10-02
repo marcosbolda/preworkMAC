@@ -14,7 +14,9 @@ S = Score(dur=18, T60=1.0)
 NOTES = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5, 1174.66, 1318.5]
 for e in EV:
     t, k = e["t"], e["kind"]
-    if k == "pay":
+    if k == "toggle":
+        S.place(wood(300, 0.06), t, 0.45); S.place(bubble(700, 0.18), t + 0.03, 0.22, send=0.3)
+    elif k == "pay":
         i = e["i"]; g = 0.32 if i == 0 else 0.22
         S.place(bubble(420 + 30 * i, 0.22), t, g, send=0.3)
         S.place(glass(1568, 0.5, 0.6), t + 0.03, g * 0.35, send=0.45)
