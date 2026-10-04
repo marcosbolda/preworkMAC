@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Ciudad Salud · Profesionales</title>
+<style>
+html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#20548b}
+canvas{position:absolute;left:0;top:0;width:1080px;height:1920px}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<script src="font.js"></script>
+<script src="slab.js"></script>
+<script src="motion.js"></script>
+<script>
+// Ciudad Salud · "Directorio que se despliega" — 9:16, 31 s. Every value is a pure function of t.
+const W = 1080, H = 1920, DUR = 31;
+const { clamp, lerp, sstep, spring } = OM, E = OM.ease;
+
+// ── the directory ──
+const AREAS = [
+  { name: 'PSICOPEDAGOGÍA', pros: [
+    { n: 'YANINA PAOLA STALLDECKER', tel: '2932 637862', b: ['Lunes de 17 a 21 hs'] },
+    { n: 'ARIANA ROSALES', tel: '2932 500720', b: ['Martes de 17 a 21 hs'] },
+    { n: 'GAB MILAGROS', tel: '2932 455023', b: ['Miércoles de 17 a 21 hs'] } ] },
+  { name: 'FONOAUDIOLOGÍA', pros: [
+    { n: 'BELÉN CANO', tel: '2932 517574', b: ['Lunes, miércoles y viernes', 'de 15 a 20 hs', 'Martes de 8 a 12 hs'], cont: [1] },
+    { n: 'MARIANA E. PEREYRA BARRIOS', tel: '2932 443286', b: ['Lunes de 8 a 12 hs'] },
+    { n: 'EMILCE PASTRANA', tel: '290 1517698', b: ['Jueves de 16 a 20 hs'], isNew: true } ] },
+  { name: 'PSICOLOGÍA', pros: [
+    { n: 'PABLO GOMEZ', tel: '2932 473171', a: 'Adolescentes y adultos', b: ['Lunes de 8 a 17 hs', 'Martes y jueves de 12 a 20 hs'] },
+    { n: 'ELIANA ZWEEDYK', tel: '2932 473732', a: 'Jóvenes, adultos y adultos mayores', b: ['Miércoles de 13 a 21 hs'] },
+    { n: 'MELISA GENOLET', tel: '2932 440460', a: 'Niños, adolescentes y adultos', b: ['Martes y jueves de 15 a 19 hs'] },
+    { n: 'LUCÍA PILAR MASINI', tel: '2932 548363', a: 'Jóvenes y adultos', b: ['Viernes de 16 a 20 hs'] } ] },
+];
+// section windows: open (cards unfold), close (cards fold into the header)
+const SEC = [ { open: 5.7, close: 11.0 }, { open: 11.75, close: 18.2 }, { open: 18.95, close: 26.0 } ];
+const LOGO_UP = 3.2, TABS = 4.0, GATHER = 5.15, END = 26.45, NEWB = 13.0;
+window.__meta = { dur: DUR, fps: 30, w: W, h: H, inFrame: { header: [5.6, 26.0, 'whole'], logo: [27.5, 31, 'whole'] } };
+
+const C = { top: [66, 116, 169], bot: [24, 66, 112], panel: 'rgba(16,44,82,0.62)', white: '#fff', navy: '#173f6e', soft: 'rgba(255,255,255,0.78)', badge: '#8fd6ff' };
+const F = (wt, px) => `${wt} ${px}px M`, S = (wt, px) => `${wt} ${px}px Slab`;
+
+// ── canvas ──
+const cv = document.getElementById('cv'); let g, DPR = 1;
+function setup() { DPR = window.devicePixelRatio || 1; cv.width = W * DPR; cv.height = H * DPR; g = cv.getContext('2d'); }
+const mat = M => g.setTransform(M[0] * DPR, M[1] * DPR, M[2] * DPR, M[3] * DPR, M[4] * DPR, M[5] * DPR);
+function rr(x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+function txt(s, x, y, font, col, align = 'left', ls = 0) { g.font = font; g.fillStyle = col; g.textAlign = align; g.textBaseline = 'alphabetic'; g.letterSpacing = ls + 'px'; g.fillText(s, x, y); g.letterSpacing = '0px'; }
+const mixc = (a, b, k) => `rgb(${a.map((v, i) => Math.round(lerp(v, b[i], k))).join(',')})`;
+function wrap(s, font, maxW) { g.font = font; const out = []; let line = ''; for (const w of s.split(' ')) { const tryL = line ? line + ' ' + w : w; if (g.measureText(tryL).width > maxW && line) { out.push(line); line = w; } else line = tryL; } out.push(line); return out; }
+
+let GRAIN;
+function makeGrain() { GRAIN = document.createElement('canvas'); GRAIN.width = GRAIN.height = 256; const x = GRAIN.getContext('2d'), d = x.createImageData(256, 256), r = OM.rng(5);
+  for (let i = 0; i < d.data.length; i += 4) { const w = r() < 0.5 ? 255 : 0; d.data[i] = d.data[i + 1] = d.data[i + 2] = w; d.data[i + 3] = Math.floor(r() * 8); } x.putImageData(d, 0, 0); }
+
+// ── camera: still on the reading holds, a chase into the new name ──
+let KEYS;
+function buildKeys() {
+  const P = cardRect(1, 2);
+  KEYS = [
+    { t: 0, x: 540, y: 960, zoom: 1.04 }, { t: 2.6, x: 540, y: 960, zoom: 1.0, curve: E.sineInOut },
+    { t: NEWB - 0.1, x: 540, y: 960, zoom: 1.0 },
+    { t: NEWB + 0.55, x: 540, y: P.y + P.h / 2 - 120, zoom: 1.12, curve: E.expoInOut },
+    { t: 16.6, x: 540, y: P.y + P.h / 2 - 120, zoom: 1.12 },
+    { t: 17.3, x: 540, y: 960, zoom: 1.0, curve: E.expoInOut },
+  ];
+}
+const SHAKES = [[GATHER + 0.42, 5, 9], [SEC[1].open - 0.02, 3, 10], [SEC[2].open - 0.02, 3, 10], [NEWB + 0.55, 4, 9], [END + 0.65, 5, 9]];
+function camAt(t) {
+  const c = OM.camera(t, KEYS, { W, H }); let x = c.x, y = c.y, rot = 0;
+  for (const [th, amp, decay] of SHAKES) { const s = OM.shake(t, th, { amp, decay, seed: Math.round(th * 100) }); x += s.x / c.zoom; y += s.y / c.zoom; rot += s.rot * 0.4; }
+  return { x, y, zoom: c.zoom, rot };
+}
+
+// ── ground: the brick wall of the building, tinted like the posts ──
+function ground(cam) {
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const gr = g.createLinearGradient(0, 0, W * 0.3, H); gr.addColorStop(0, mixc(C.top, C.top, 0)); gr.addColorStop(1, mixc(C.bot, C.bot, 0));
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  mat(OM.view(cam, { W, H, depth: 0.5 }));
+  g.strokeStyle = 'rgba(255,255,255,0.045)'; g.lineWidth = 2;
+  for (let r = -6; r < 46; r++) { const y = r * 48; g.beginPath(); g.moveTo(-300, y); g.lineTo(W + 300, y); g.stroke();
+    for (let c = -4; c < 14; c++) { const x = c * 120 + (r % 2 ? 60 : 0); g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 48); g.stroke(); } }
+  // the big faint logo on the wall
+  g.save(); g.globalAlpha = 0.08; logoMark(540, 1500, 380, 1, 4); g.restore();
+  const vg = g.createRadialGradient(540, 900, 300, 540, 900, 1300); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(5,20,45,0.45)');
+  g.setTransform(DPR, 0, 0, DPR, 0, 0); g.fillStyle = vg; g.fillRect(0, 0, W, H);
+}
+
+// ── the logo: arch, sun, trees, house and building, drawn as strokes ──
+// k: 0..1 how much is drawn. cx, baseY: base centre; R: arch radius.
+function strokeTo(pts, k) {   // polyline drawn to fraction k
+  let L = 0; for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  let left = L * clamp(k); g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length && left > 0; i++) { const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]), u = Math.min(1, left / d);
+    g.lineTo(lerp(pts[i - 1][0], pts[i][0], u), lerp(pts[i - 1][1], pts[i][1], u)); left -= d; }
+  g.stroke();
+}
+function logoMark(cx, baseY, R, k, lw) {
+  const P = (x, y) => [cx + x * R, baseY + y * R];
+  g.save(); g.strokeStyle = '#fff'; g.lineWidth = lw; g.lineCap = 'round'; g.lineJoin = 'round';
+  const ka = sstep(0, 0.45, k);
+  g.beginPath(); g.arc(cx, baseY, R, Math.PI, Math.PI + Math.PI * ka); g.stroke();
+  const ks = sstep(0.35, 0.55, k); if (ks > 0) { g.beginPath(); g.arc(...P(-0.31, -0.74), 0.085 * R * ks, 0, Math.PI * 2); g.stroke(); }
+  const kt = sstep(0.4, 0.7, k);
+  strokeTo([P(-0.56, 0), P(-0.56, -0.2), P(-0.69, -0.2), P(-0.56, -0.44), P(-0.43, -0.2), P(-0.56, -0.2)], kt);
+  strokeTo([P(0.6, 0), P(0.6, -0.2), P(0.47, -0.2), P(0.6, -0.44), P(0.73, -0.2), P(0.6, -0.2)], kt);
+  const kh = sstep(0.5, 0.9, k);
+  strokeTo([P(-0.34, 0), P(-0.34, -0.36), P(-0.15, -0.56), P(0.04, -0.4), P(0.04, 0)], kh);
+  strokeTo([P(0.04, -0.4), P(0.38, -0.7), P(0.38, 0)], kh);
+  const kw = sstep(0.72, 1, k);
+  strokeTo([P(0.14, 0), P(0.14, -0.44), P(0.22, -0.44), P(0.22, 0)], kw);
+  strokeTo([P(0.27, 0), P(0.27, -0.5), P(0.33, -0.5), P(0.33, 0)], kw);
+  g.restore();
+}
+function logo(t, cx, baseY, s) {   // mark + wordmark, s = scale (1 = big)
+  const R = 230 * s, k = OM.seg(t, 0.2, 1.9);
+  logoMark(cx, baseY, R, E.cubicOut(k), 9 * s);
+  const word = 'CIUDAD'; g.font = S(800, 150 * s); const ww = g.measureText(word).width; let x = cx - ww / 2;
+  [...word].forEach((ch, i) => { const d = OM.letterDrop(t, 1.55, i, { dist: 50 }); const cw = g.measureText(ch).width;
+    g.save(); g.globalAlpha = d.op; g.translate(x + cw / 2, baseY + 128 * s + d.y * s); g.scale(d.sx, d.sy); txt(ch, 0, 0, S(800, 150 * s), '#fff', 'center'); g.restore(); x += cw; });
+  const sw = OM.wordRise(t, 2.05, { dist: 20 });
+  g.save(); g.globalAlpha = sw.op; txt('SALUD', cx + 14 * s, baseY + 230 * s + sw.y * s, S(700, 88 * s), '#fff', 'center', 28 * s); g.restore();
+  return { x: cx - 260 * s, y: baseY - R, w: 520 * s, h: R + 250 * s };
+}
+
+// ── cards ──
+const CX = 80, CW = 920, NAME = F(800, 44), BODY = F(500, 36), AUD = F(500, 29), TEL = F(600, 36);
+function layoutArea(a) {
+  let y = 540;
+  a.pros.forEach(p => { p.lines = wrap(p.n, NAME, 520);
+    p.h = 34 + p.lines.length * 52 + (p.a ? 46 : 6) + p.b.length * 48 + 22; p.y = y; y += p.h + 24; });
+  a.bottom = y;
+}
+const cardRect = (ai, pi) => { const p = AREAS[ai].pros[pi]; return { x: CX, y: p.y, w: CW, h: p.h }; };
+const HEAD = { x: 80, y: 392, w: 920, h: 112 };
+function cardState(ai, pi, t) {   // unfold from the header, fold back into it
+  const s = SEC[ai], t0 = s.open + pi * 0.2, k = spring(t - t0, 0.7, 15), kc = E.expoIn(OM.seg(t, s.close + (AREAS[ai].pros.length - 1 - pi) * 0.05, s.close + 0.32 + (AREAS[ai].pros.length - 1 - pi) * 0.05));
+  const p = AREAS[ai].pros[pi]; const yHome = p.y, yFrom = HEAD.y + HEAD.h - 40;
+  const u = Math.min(k, 1 + 0.03 * (k - 1)) * (1 - kc);
+  return { vis: t >= t0 && kc < 1, y: lerp(yFrom, yHome, Math.max(0, u)), sy: clamp(0.25 + 0.75 * clamp(k * 1.2)) * (1 - 0.7 * kc), op: clamp(k * 2.2) * (1 - kc) };
+}
+function drawCard(ai, pi, t) {
+  const p = AREAS[ai].pros[pi], st = cardState(ai, pi, t); if (!st.vis || st.op < 0.003) return;
+  const x = CX, y = st.y, w = CW, h = p.h;
+  g.save(); g.globalAlpha = st.op; g.translate(0, y); g.scale(1, st.sy); g.translate(0, -y);
+  g.fillStyle = C.panel; rr(x, y, w, h, 22); g.fill();
+  g.fillStyle = 'rgba(255,255,255,0.9)'; g.fillRect(x, y + 18, 5, h - 36);
+  let yy = y + 34 + 40;
+  p.lines.forEach((l, i) => txt(l, x + 40, yy + i * 52, NAME, '#fff'));
+  // phone pill, top right
+  g.font = TEL; const tw = g.measureText(p.tel).width + 44;
+  g.fillStyle = '#fff'; rr(x + w - 30 - tw, y + 26, tw, 62, 18); g.fill(); txt(p.tel, x + w - 30 - tw / 2, y + 70, TEL, C.navy, 'center');
+  yy += (p.lines.length - 1) * 52;
+  if (p.a) { txt(p.a, x + 40, yy + 46, AUD, C.soft); yy += 46; }
+  yy += 6;
+  p.b.forEach((b, i) => { const cont = p.cont && p.cont.includes(i); yy += 48;
+    if (!cont) { g.fillStyle = '#fff'; g.beginPath(); g.arc(x + 50, yy - 12, 6, 0, Math.PI * 2); g.fill(); }
+    txt(b, x + 74, yy, BODY, '#fff'); });
+  if (p.isNew) {
+    const bw = OM.popIn(t, NEWB, { rise: 20, s0: 0.6, ds: 0.4, zeta: 0.45 }), im = OM.impact(t, NEWB + 0.1, { decay: 7, omega: 22, sqx: 0.08, sqy: 0.1 });
+    if (t >= NEWB) { g.save(); g.globalAlpha *= bw.op; g.font = F(800, 26); const bwid = g.measureText('NUEVA').width + 36;
+      g.translate(x + w - 30 - bwid / 2, y + h - 44 + bw.dy); g.scale(bw.s * im.sx, bw.s * im.sy);
+      g.fillStyle = C.badge; rr(-bwid / 2, -24, bwid, 48, 24); g.fill(); txt('NUEVA', 0, 10, F(800, 26), C.navy, 'center', 2); g.restore(); }
+    // a light runs across the new card once
+    const sh = OM.seg(t, NEWB + 0.15, NEWB + 0.9);
+    if (sh > 0 && sh < 1) { g.save(); rr(x, y, w, h, 22); g.clip(); const sx = lerp(x - 300, x + w + 300, E.cubicInOut(sh));
+      const lg = g.createLinearGradient(sx - 160, 0, sx + 160, 0); lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.5, 'rgba(255,255,255,0.22)'); lg.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = lg; g.fillRect(x, y, w, h); g.restore(); }
+  }
+  g.restore();
+}
+
+// ── tabs → header ──
+const TAB = i => ({ x: 120, y: 760 + i * 170, w: 840, h: 124 });
+function activeArea(t) { let a = 0; for (let i = 0; i < SEC.length; i++) if (t >= (i === 0 ? 0 : SEC[i - 1].close + 0.35)) a = i; return a; }
+function drawTabsAndHeader(t) {
+  if (t < TABS || t >= END + 0.5) return null;
+  const outK = E.expoIn(OM.seg(t, END, END + 0.4));
+  // the three tabs pop in, then all gather into the header (tab 0 becomes it)
+  const gk = E.expoOut(OM.seg(t, GATHER, GATHER + 0.5));
+  if (t < GATHER + 0.5) {
+    for (let i = 2; i >= 0; i--) {
+      const pin = OM.popIn(t, TABS + i * 0.14, { rise: 50, s0: 0.85, ds: 0.15 }); if (t < TABS + i * 0.14) continue;
+      const kk = E.expoOut(OM.seg(t, GATHER + i * 0.05, GATHER + 0.45 + i * 0.05));
+      const R = { x: lerp(TAB(i).x, HEAD.x, kk), y: lerp(TAB(i).y, HEAD.y, kk), w: lerp(TAB(i).w, HEAD.w, kk), h: lerp(TAB(i).h, HEAD.h, kk) };
+      g.save(); g.globalAlpha = pin.op * (i === 0 ? 1 : 1 - sstep(0.7, 1, kk)); g.translate(R.x + R.w / 2, R.y + R.h / 2 + pin.dy); g.scale(pin.s, pin.s);
+      g.fillStyle = i === 0 ? '#fff' : 'rgba(255,255,255,0.14)'; rr(-R.w / 2, -R.h / 2, R.w, R.h, 26); g.fill();
+      if (i) { g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 3; rr(-R.w / 2, -R.h / 2, R.w, R.h, 26); g.stroke(); }
+      txt(AREAS[i].name, 0, 19, F(800, 52), i === 0 ? C.navy : '#fff', 'center', 1); g.restore();
+    }
+    return HEAD;
+  }
+  // the header: a rail of the three names that slides to the open area
+  let shift = 0; for (let i = 1; i < SEC.length; i++) shift += spring(t - (SEC[i - 1].close + 0.35), 0.62, 14);
+  const im = OM.impact(t, GATHER + 0.42, { decay: 8, omega: 24, sqx: 0.03, sqy: 0.05 });
+  g.save(); g.globalAlpha = 1 - outK; g.translate(HEAD.x + HEAD.w / 2, HEAD.y + HEAD.h / 2 - outK * 80); g.scale(im.sx, im.sy);
+  g.fillStyle = '#fff'; rr(-HEAD.w / 2, -HEAD.h / 2, HEAD.w, HEAD.h, 26); g.fill();
+  g.save(); rr(-HEAD.w / 2, -HEAD.h / 2, HEAD.w, HEAD.h, 26); g.clip();
+  AREAS.forEach((a, i) => { const dx = (i - shift) * HEAD.w; if (Math.abs(dx) < HEAD.w * 1.1) txt(a.name, dx, 19, F(800, 56), C.navy, 'center', 1); });
+  g.restore();
+  // three dots: where we are
+  for (let i = 0; i < 3; i++) { const on = clamp(1 - Math.abs(shift - i)); g.fillStyle = `rgba(23,63,110,${0.25 + 0.75 * on})`; g.beginPath(); g.arc((i - 1) * 26, HEAD.h / 2 - 16, 5 + 2 * on, 0, Math.PI * 2); g.fill(); }
+  g.restore();
+  return HEAD;
+}
+
+// ── seek ──
+let CAM, TRACK = {};
+function seek(t) {
+  CAM = camAt(t); ground(CAM);
+  const VIEW = OM.view(CAM, { W, H }); mat(VIEW);
+  // logo: big at the start, up to the top for the directory, back down at the end
+  const up = E.expoInOut(OM.seg(t, LOGO_UP, LOGO_UP + 0.7)), down = E.expoInOut(OM.seg(t, END + 0.15, END + 0.85));
+  const k = up * (1 - down), s = lerp(1, 0.4, k), baseY = lerp(700, 196, k) - down * 60;
+  const lb = logo(t, 540, baseY, s);
+  // kicker under the small logo, while the tabs wait
+  const kk = OM.wordRise(t, 3.75, { dist: 18 }), ko = 1 - sstep(GATHER, GATHER + 0.3, t);
+  if (t >= 3.75 && ko > 0) { g.save(); g.globalAlpha = kk.op * ko; txt('PROFESIONALES · HORARIOS · CONTACTO', 540, 620 + kk.y, F(700, 30), C.soft, 'center', 4); g.restore(); }
+  const hb = drawTabsAndHeader(t);
+  AREAS.forEach((a, ai) => a.pros.forEach((p, pi) => drawCard(ai, pi, t)));
+  // "Consultar atención online" under psicología
+  const on = OM.wordRise(t, SEC[2].open + 1.1, { dist: 20 }), onOut = 1 - sstep(SEC[2].close, SEC[2].close + 0.3, t);
+  if (t >= SEC[2].open + 1.1 && onOut > 0) { g.save(); g.globalAlpha = on.op * onOut; txt('Consultar atención online.', 540, AREAS[2].bottom + 70 + on.y, F(600, 40), '#fff', 'center'); g.restore(); }
+  // end: Instagram + address
+  if (t >= END + 0.6) {
+    const r1 = OM.wordRise(t, END + 0.75, { dist: 26 }), r2 = OM.wordRise(t, END + 0.95, { dist: 26 }), r3 = OM.popIn(t, END + 1.25, { rise: 24, s0: 0.85, ds: 0.15 });
+    g.save(); g.globalAlpha = r1.op; g.translate(0, r1.y);
+    g.strokeStyle = '#fff'; g.lineWidth = 5; rr(290, 1170, 58, 58, 16); g.stroke(); g.beginPath(); g.arc(319, 1199, 14, 0, Math.PI * 2); g.stroke(); g.fillStyle = '#fff'; g.beginPath(); g.arc(337, 1182, 4, 0, Math.PI * 2); g.fill();
+    txt('ciudadsalud.pa', 372, 1214, S(500, 50), '#fff'); g.restore();
+    g.save(); g.globalAlpha = r2.op; g.translate(0, r2.y);
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(319, 1292, 22, Math.PI * 0.85, Math.PI * 2.15); g.lineTo(319, 1340); g.closePath(); g.fill(); g.fillStyle = mixc(C.bot, C.top, 0.4); g.beginPath(); g.arc(319, 1292, 8, 0, Math.PI * 2); g.fill();
+    txt('Gral. Paz 505', 372, 1330, S(500, 50), '#fff'); g.restore();
+    if (t >= END + 1.25) { g.save(); g.globalAlpha = r3.op; g.translate(540, 1470 + r3.dy); g.scale(r3.s, r3.s); g.font = F(700, 32);
+      const pw = g.measureText('CONSULTÁ ATENCIÓN ONLINE').width + 70; g.strokeStyle = '#fff'; g.lineWidth = 3; rr(-pw / 2, -40, pw, 80, 40); g.stroke();
+      txt('CONSULTÁ ATENCIÓN ONLINE', 0, 12, F(700, 32), '#fff', 'center', 2); g.restore(); }
+  }
+  TRACK = { logo: OM.projectBox(VIEW, { ...lb, op: 1 }) };
+  if (hb) TRACK.header = OM.projectBox(VIEW, { ...hb, op: 1 });
+  g.setTransform(DPR, 0, 0, DPR, 0, 0); g.globalAlpha = 1; g.fillStyle = g.createPattern(GRAIN, 'repeat'); g.fillRect(0, 0, W, H);
+}
+
+window.__events = () => {
+  const ev = [{ t: 0.2, kind: 'draw' }, { t: 1.55, kind: 'letters' }, { t: 2.05, kind: 'salud' }, { t: LOGO_UP, kind: 'whoosh' }];
+  [0, 1, 2].forEach(i => ev.push({ t: TABS + i * 0.14, kind: 'tab', i }));
+  ev.push({ t: GATHER + 0.42, kind: 'land' });
+  SEC.forEach((s, ai) => { AREAS[ai].pros.forEach((p, pi) => ev.push({ t: s.open + pi * 0.2, kind: 'card', ai, pi }));
+    ev.push({ t: s.close, kind: 'fold', ai }); if (ai < 2) ev.push({ t: s.close + 0.35, kind: 'slide', ai }); });
+  ev.push({ t: NEWB, kind: 'new' }, { t: NEWB + 0.1, kind: 'push' }, { t: 16.6, kind: 'pull' }, { t: END + 0.15, kind: 'whoosh' }, { t: END + 0.75, kind: 'end' });
+  return ev.sort((a, b) => a.t - b.t);
+};
+window.__track = t => { seek(t); return TRACK; };
+window.__motion = (t0, t1) => {
+  let d = OM.screenTravel(camAt(t0), camAt(t1), camAt((t0 + t1) / 2), { W, H });
+  seek(t0); const A = TRACK; seek(t1); const B = TRACK;
+  for (const k in A) if (B[k]) d = Math.max(d, Math.abs(A[k].x - B[k].x), Math.abs(A[k].y - B[k].y), Math.abs(A[k].w - B[k].w), Math.abs(A[k].h - B[k].h));
+  AREAS.forEach((a, ai) => a.pros.forEach((p, pi) => { const s0 = cardState(ai, pi, t0), s1 = cardState(ai, pi, t1); if (s0.vis || s1.vis) d = Math.max(d, Math.abs(s0.y - s1.y), p.h * Math.abs(s0.sy - s1.sy)); }));
+  return d;
+};
+window.__seek = async t => { seek(t); return true; };
+const b64 = s => Uint8Array.from(atob(s), ch => ch.charCodeAt(0)).buffer;
+const FM = new FontFace('M', b64(window.FONT_B64), { weight: '100 900' }), FS = new FontFace('Slab', b64(window.SLAB_B64), { weight: '100 900' });
+document.fonts.add(FM); document.fonts.add(FS);
+window.__ready = Promise.all([FM.load(), FS.load()]).then(() => document.fonts.ready).then(() => { setup(); makeGrain(); AREAS.forEach(layoutArea); buildKeys(); seek(0); return true; });
+const q = new URLSearchParams(location.search);
+if (q.has('t')) __ready.then(() => seek(parseFloat(q.get('t'))));
+if (q.has('play')) __ready.then(() => { const t0 = performance.now(); (function loop() { seek(((performance.now() - t0) / 1000) % DUR); requestAnimationFrame(loop); })(); });
+</script>
+</body>
+</html>

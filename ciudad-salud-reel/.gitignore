@@ -1,0 +1,4 @@
+_frames/
+*.render.json
+render*.log
+*-video.mp4
