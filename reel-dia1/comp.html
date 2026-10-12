@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>recorridos en familia · día 1</title>
+<script src="font.js"></script>
+<style>
+:root{ --bg:#fefdfb; --ink:#141414; --mute:#9a978f; }
+html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:var(--bg)}
+body{font-family:'Q',system-ui,sans-serif;color:var(--ink);font-weight:700}
+#stage{position:absolute;inset:0;overflow:hidden;background:var(--bg)}
+.abs{position:absolute;left:0;top:0;will-change:transform,opacity;white-space:nowrap}
+.ctr{left:0;right:0;text-align:center}
+#world{position:absolute;left:0;top:0;width:1px;height:1px;transform-origin:0 0}
+#road{position:absolute;left:0;top:0;overflow:visible}
+.h1{font-size:76px;letter-spacing:-.01em;line-height:1}
+#lon{font-size:210px;letter-spacing:-.03em;line-height:1}
+#lon span{display:inline-block;transform-origin:50% 90%}
+.h3{font-size:58px;font-weight:600;line-height:1}
+.small{font-size:44px;font-weight:600;color:var(--ink)}
+#g1{font-size:54px;font-weight:700}
+.lab{display:flex;align-items:center;gap:18px;font-size:68px;line-height:1;transform-origin:0 50%}
+.lab svg{width:66px;height:66px;flex:none}
+.tag{font-size:40px;font-weight:600;color:var(--mute);transform-origin:0 0}
+.dot{position:absolute;left:0;top:0;width:100px;height:100px;margin:-50px 0 0 -50px;border-radius:50%;background:var(--ink);will-change:transform}
+#cap{font-size:44px;font-weight:600;line-height:1.2;white-space:normal;padding:0 90px}
+#logo{position:absolute;left:0;top:0;width:900px;height:900px;transform-origin:0 0}
+#hud{position:absolute;right:14px;bottom:10px;font:20px monospace;color:#c00;display:none}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="world"><svg id="road" width="1080" height="4400" viewBox="0 0 1080 4400">
+    <path id="rp" d="" fill="none" stroke="#141414" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+    <path id="rc" d="" fill="none" stroke="#fefdfb" stroke-width="4" stroke-dasharray="16 22" stroke-linecap="round"/>
+    <g id="marks"></g>
+  </svg></div>
+
+  <!-- A · hook -->
+  <div id="a1" class="abs ctr h1" style="top:740px">¿cuánto cuesta</div>
+  <div id="a2" class="abs ctr h1" style="top:830px;color:var(--mute)">realmente</div>
+  <div id="lon" class="abs ctr" style="top:930px"></div>
+  <div id="a4" class="abs ctr h3" style="top:1170px">para una familia de tres?</div>
+  <!-- B · family -->
+  <div id="b1" class="abs small">2 adultos</div>
+  <div id="b2" class="abs small">1 chico</div>
+  <div id="c1" class="abs ctr h1" style="top:560px">vamos por partes</div>
+  <!-- E/F · list -->
+  <div id="e1" class="abs h1">tu planilla</div>
+  <div id="e2" class="abs tag">londres · 2 adultos + 1 chico</div>
+  <div id="f1" class="abs h1" style="line-height:1.1">¿qué gasto te<br>preocupa más?</div>
+  <div id="labs"></div>
+
+  <img id="logo" src="logo.png" alt="">
+  <div id="g1" class="abs ctr small">contanos en los comentarios</div>
+  <div id="cap" class="abs ctr" style="top:1470px"></div>
+  <div id="dots"></div>
+  <div id="hud"></div>
+</div>
+<script src="motion.js"></script>
+<script>
+// Recorridos en Familia · día 1 · "el camino": the logo's sun is the subject. It splits into the family,
+// rejoins, rolls down the logo's winding road through six costs, becomes the list's selector, and lands
+// back in the logo as its sun. Everything is a pure function of t. VO (ElevenLabs, take c) starts at VO_OFF.
+const {clamp, lerp, sstep, ssstep, spring, ease} = OM;
+const DUR=25.0, VO_OFF=0.4;
+window.__meta={dur:DUR,fps:30,w:1080,h:1920,inFrame:[]};
+const v=s=>s+VO_OFF;                                     // VO timestamps (silencedetect on take c) → film time
+
+// beats
+const DOT_IN=0.15, A=[v(0.0),v(0.62),v(1.15),v(2.05)], A_OUT=v(3.35);
+const B_SPLIT=v(3.57), B_L1=v(3.8), B_L2=v(4.45), MERGE=v(5.77), C_OUT=v(6.75);
+const ROAD0=v(5.95), ROLL0=v(6.2);
+const STOP_T=[v(6.99),v(7.87),v(8.87),v(9.59),v(10.46),v(11.95)];   // arrival on each word
+const HOP=v(12.55), HOP_LAND=v(12.95), LBL_IMP=v(12.6);
+const ZOOM=v(14.1), ZOOM_D=1.25, LIST=v(15.5), LIST_D=0.75;
+const Q_IN=v(19.87), SCAN0=v(20.05), SCAN_DT=0.17, G_OUT=v(21.3), FLY=v(21.39), FLY_D=0.62, LOGO_IN=v(21.39)+0.5, G_IN=v(21.6);
+
+const STOPS=[
+  {x:290,y:1450,w:'pasajes',      icon:'plane'},
+  {x:790,y:1900,w:'alojamiento',  icon:'house'},
+  {x:290,y:2350,w:'comida',       icon:'food'},
+  {x:790,y:2800,w:'transporte',   icon:'bus'},
+  {x:290,y:3250,w:'actividades',  icon:'eye'},
+  {x:640,y:3700,w:'imprevistos',  icon:'umb'},
+];
+const P0={x:540,y:1000}, PEND={x:540,y:4060};
+const CAPS=[[v(3.57),v(4.96),'dos adultos y un chico.'],[v(5.77),v(6.59),''],
+  [v(11.7),v(13.71),'y siempre, un colchón para imprevistos.'],
+  [v(14.44),v(16.6),'los precios cambian según la fecha,'],[v(16.6),v(19.3),'así que armá tu planilla y chequeá todo antes de viajar.']];
+
+// logo placement: 900 px wide; the logo's sun (746,381 r29.5 in the 1254 px file) is where the dot lands
+const LS=900/1254, LOGO_X=90, LOGO_Y=381, SUN={x:LOGO_X+746*LS, y:LOGO_Y+381*LS, r:29.5*LS};
+
+const ICONS={
+ plane:'<path d="M29 4c2-2.5 6-2.5 6 0v19l23 13v7l-23-7v13l7 5v5l-10-3-10 3v-5l7-5V36L6 43v-7l23-13z"/>',
+ house:'<path d="M4 32 32 8l28 24h-7v26H39V42H25v16H11V32z"/>',
+ food:'<path d="M14 4h3v16h3V4h3v16h3V4h3v18c0 5-3 8-7 9v29h-4V31c-4-1-7-4-7-9V4zm32 0c6 2 9 10 9 22 0 3-2 5-5 5h-1v29h-5V4z"/>',
+ bus:'<path d="M12 6h40c4 0 6 2 6 6v38c0 2-1 3-3 3v5c0 2-1 3-3 3h-3c-2 0-3-1-3-3v-5H18v5c0 2-1 3-3 3h-3c-2 0-3-1-3-3v-5c-2 0-3-1-3-3V12c0-4 2-6 6-6zm2 8v16h36V14zm2 26a4 4 0 1 0 0 1zm32 0a4 4 0 1 0 0 1z" fill-rule="evenodd"/>',
+ eye:'<circle cx="32" cy="28" r="22" fill="none" stroke="currentColor" stroke-width="5"/><path d="M32 6v44M10 28h44M16.5 12.5l31 31M47.5 12.5l-31 31" stroke="currentColor" stroke-width="3"/><circle cx="32" cy="28" r="5"/><path d="M28 28h8l10 32H18z"/>',
+ umb:'<path d="M32 4C16 4 4 15 4 30c3-3 7-4 10-1 3-3 8-3 11 0 2-2 5-2 7-1 2-1 5-1 7 1 3-3 8-3 11 0 3-3 7-2 10 1C60 15 48 4 32 4z"/><path d="M30 30h4v22c0 6-4 9-9 9s-8-4-8-8h4c0 2 2 4 4 4s5-1 5-5z"/>',
+};
+
+const $=id=>document.getElementById(id);
+// hook word "londres" as letters
+const lonL=[...'londres'].map(ch=>{const s=document.createElement('span');s.textContent=ch;$('lon').appendChild(s);return s;});
+// stop labels + tags
+STOPS.forEach((s,i)=>{
+  const d=document.createElement('div'); d.className='abs lab'; d.innerHTML=`<svg viewBox="0 0 64 64" fill="currentColor">${ICONS[s.icon]}</svg><span>${s.w}</span>`; $('labs').appendChild(d); s.el=d;
+  const g=document.createElement('div'); g.className='abs tag'; g.textContent='£ ?'; $('labs').appendChild(g); s.tag=g;
+});
+// four dots: 0 = the sun (always the subject), 1 = second adult, 2 = child
+const dots=[0,1,2].map(()=>{const d=document.createElement('div');d.className='dot';$('dots').appendChild(d);return d;});
+
+// ── road geometry: Catmull-Rom through the stops, as cubic béziers ──
+const RPTS=[P0,...STOPS,PEND];
+function roadD(){ let d=`M${P0.x},${P0.y}`; for(let i=0;i<RPTS.length-1;i++){ const p0=RPTS[Math.max(0,i-1)],p1=RPTS[i],p2=RPTS[i+1],p3=RPTS[Math.min(RPTS.length-1,i+2)];
+  d+=` C${p1.x+(p2.x-p0.x)/5},${p1.y+(p2.y-p0.y)/5} ${p2.x-(p3.x-p1.x)/5},${p2.y-(p3.y-p1.y)/5} ${p2.x},${p2.y}`; } return d; }
+let LUT=[], TOTAL=0; const STOP_L=[];
+function buildRoad(){
+  const d=roadD(); $('rp').setAttribute('d',d); $('rc').setAttribute('d',d);
+  const p=$('rp'); TOTAL=p.getTotalLength(); const N=1600;
+  for(let i=0;i<=N;i++){ const q=p.getPointAtLength(TOTAL*i/N); LUT.push([q.x,q.y]); }
+  STOPS.forEach(s=>{ let best=0,bd=1e9; LUT.forEach((q,i)=>{const dd=(q[0]-s.x)**2+(q[1]-s.y)**2; if(dd<bd){bd=dd;best=i;}}); STOP_L.push(TOTAL*best/N); });
+  $('rp').setAttribute('stroke-dasharray',`${TOTAL} ${TOTAL+10}`);
+  $('marks').innerHTML=STOPS.map(s=>`<circle cx="${s.x}" cy="${s.y}" r="17" fill="#fefdfb" stroke="#141414" stroke-width="7"/>`).join('');
+}
+function atLen(L){ const N=LUT.length-1, f=clamp(L/TOTAL,0,1)*N, i=Math.min(N-1,Math.floor(f)), u=f-i; return [lerp(LUT[i][0],LUT[i+1][0],u),lerp(LUT[i][1],LUT[i+1][1],u)]; }
+
+// distance along the road over time: rests on each stop, travels into the next one on its word
+function rollLen(t){
+  const ks=[[ROLL0,0],...STOP_T.map((tt,i)=>[tt,STOP_L[i]]),[ZOOM+0.9,TOTAL]];
+  if(t<=ks[0][0]) return 0;
+  for(let i=1;i<ks.length;i++){ const [t1,l1]=ks[i],[t0,l0]=ks[i-1]; if(t<t1){ const dur=i===ks.length-1?0.9:Math.min(0.55,t1-t0-0.08); const s=t1-dur; return t<s?l0:lerp(l0,l1,ease.cubicInOut((t-s)/dur)); } }
+  return TOTAL;
+}
+function hopY(t){ const u=(t-HOP)/(HOP_LAND-HOP); return u>0&&u<1? -110*4*u*(1-u) : 0; }
+function dotRoad(t){ const [x,y]=atLen(rollLen(t)); return [x,y+hopY(t)]; }
+
+// ── camera: static for the hook, then chases the sun with lag, then pulls back to the whole road ──
+function cam(t){
+  let c={x:540,y:960,z:1};
+  if(t>ROAD0){ let ax=0,ay=0; for(let k=0;k<6;k++){ const [x,y]=atLen(rollLen(t-0.06*k)); ax+=x; ay+=y; } ax/=6; ay/=6;
+    const f={x:540+(ax-540)*0.3, y:ay+150, z:1}; const b=ease.cubicInOut(clamp((t-ROAD0)/0.9)); c={x:lerp(c.x,f.x,b),y:lerp(c.y,f.y,b),z:1}; }
+  const zb=ease.quintInOut(clamp((t-ZOOM)/ZOOM_D)); c={x:lerp(c.x,540,zb),y:lerp(c.y,2540,zb),z:lerp(1,0.5,zb)};
+  const sh=OM.shake(t,HOP_LAND,{amp:14,decay:8,freq:15,seed:3}); c.x-=sh.x; c.y-=sh.y;
+  return c;
+}
+const proj=(c,x,y)=>[(x-c.x)*c.z+540,(y-c.y)*c.z+960];
+
+function put(el,x,y,s=1,op=1,sx=1,sy=1){ el.style.opacity=op; el.style.transform=`translate(${x.toFixed(1)}px,${y.toFixed(1)}px) scale(${(s*sx).toFixed(4)},${(s*sy).toFixed(4)})`; }
+function dotAt(el,x,y,r,op=1,sx=1,sy=1){ el.style.opacity=op; el.style.transform=`translate(${x.toFixed(1)}px,${y.toFixed(1)}px) scale(${(r/50*sx).toFixed(4)},${(r/50*sy).toFixed(4)})`; }
+function fadeWord(el,t,t0,t1,y0){ const w=OM.wordRise(t,t0), o=OM.liftOut(t,t1,{dist:50,blur:0}); el.style.opacity=t<t0?0:w.op*o.op; el.style.transform=`translateY(${(y0||0)+w.y+o.dy}px) scale(${w.s})`; }
+
+let LW=[], TW=[];
+function seek(t){
+  const c=cam(t);
+  // road layer
+  $('world').style.transform=`translate(${(540-c.x*c.z).toFixed(1)}px,${(960-c.y*c.z).toFixed(1)}px) scale(${c.z.toFixed(4)})`;
+  const drawn = t<ROAD0?0:Math.min(TOTAL,Math.max(lerp(0,520,ease.cubicOut(clamp((t-ROAD0)/0.8))), rollLen(t)+760, t>ZOOM?lerp(rollLen(t)+760,TOTAL,ease.cubicInOut(clamp((t-ZOOM)/0.8))):0));
+  $('rp').setAttribute('stroke-dashoffset',(TOTAL-drawn).toFixed(1)); $('rp').style.visibility = drawn>1?'visible':'hidden';
+  $('rc').style.opacity = drawn>0?1:0; $('rc').setAttribute('stroke-dasharray', `16 22`); $('rc').style.clipPath='none';
+  $('rc').setAttribute('stroke-dashoffset','0'); $('rc').style.strokeDasharray='';
+  $('rc').style.visibility = drawn>=TOTAL-1?'visible':'hidden';
+  [...$('marks').children].forEach((m,i)=>{ m.style.opacity = drawn>=STOP_L[i]?1:0; });
+  $('road').style.opacity = 1-ssstep(LIST,LIST+0.6,t);
+
+  // A · hook words
+  fadeWord($('a1'),t,A[0],A_OUT); fadeWord($('a2'),t,A[1],A_OUT); fadeWord($('a4'),t,A[3],A_OUT);
+  lonL.forEach((s,i)=>{ const d=OM.letterDrop(t,A[2],i,{stagger:0.045}); const o=OM.liftOut(t,A_OUT,{dist:50,blur:0});
+    s.style.opacity=t<A[2]?0:d.op*o.op; s.style.transform=`translateY(${(d.y+o.dy).toFixed(1)}px) scale(${d.sx.toFixed(3)},${d.sy.toFixed(3)})`; });
+  // B · family labels, C · "vamos por partes"
+  { const w=OM.wordRise(t,B_L1), o=OM.liftOut(t,MERGE-0.1,{dist:30,blur:0}); put($('b1'),400-0,1000+w.y+o.dy,1,t<B_L1?0:w.op*o.op); }
+  { const w=OM.wordRise(t,B_L2), o=OM.liftOut(t,MERGE-0.1,{dist:30,blur:0}); put($('b2'),640,1000+w.y+o.dy,1,t<B_L2?0:w.op*o.op); }
+  fadeWord($('c1'),t,MERGE,C_OUT);
+
+  // the sun · family · road · selector · logo
+  const fam=[{x:450,y:880,r:52},{x:590,y:880,r:52},{x:715,y:908,r:32}];
+  let sx=1,sy=1, main=[540,560], r=46, op=1;
+  { const p=OM.popIn(t,DOT_IN,{zeta:0.45,omega:16}); r=46*clamp(p.k,0,1.3); op=t<DOT_IN?0:1;
+    const im=OM.impact(t,A[2]+0.12,{sqx:0.18,sqy:0.22}); sx=im.sx; sy=im.sy;
+    const yb=OM.ring(t-(A[2]+0.12),7,18)*-26; main=[540,560+yb]; }
+  // drop to the family line, split
+  const dropK=ease.cubicInOut(clamp((t-A_OUT)/0.4)); main=[lerp(main[0],540,dropK),lerp(main[1],880,dropK)];
+  const sk=spring(t-B_SPLIT,0.55,15), mk=spring(t-MERGE,0.7,16);
+  const famPos=fam.map(f=>({x:lerp(lerp(main[0],f.x,sk),P0.x,mk), y:lerp(lerp(main[1],f.y,sk),P0.y,mk), r:lerp(lerp(r,f.r,sk),34,mk)}));
+  let D0;
+  if(t<B_SPLIT) D0={x:main[0],y:main[1],r};
+  else if(t<ROLL0) D0=famPos[0];
+  else { const [x,y]=dotRoad(t); const [px,py]=proj(c,x,y); D0={x:px,y:py,r:34*c.z};
+    const im=OM.impact(t,HOP_LAND,{sqx:0.22,sqy:0.28}); sx=im.sx; sy=im.sy;
+    STOP_T.forEach(tt=>{ const k=OM.impact(t,tt,{sqx:0.12,sqy:0.15,decay:9}); sx*=k.sx; sy*=k.sy; }); }
+  // list: the sun becomes the row selector; then the question scans; then it flies home to the logo
+  const ROWY=i=>720+i*128;
+  const lk=ease.cubicInOut(clamp((t-(LIST+0.25))/0.6));
+  let row=0; if(t>SCAN0){ row=Math.min(5,Math.floor((t-SCAN0)/SCAN_DT)); }
+  let selY=ROWY(0); if(t>SCAN0){ const i=Math.min(5,Math.floor((t-SCAN0)/SCAN_DT)); const u=ease.expoOut(clamp((t-SCAN0-i*SCAN_DT)/0.12)); selY=lerp(ROWY(Math.max(0,i-1)),ROWY(i),i===0?1:u); }
+  if(lk>0){ D0={x:lerp(D0.x,92,lk),y:lerp(D0.y,selY,lk),r:lerp(D0.r,15,lk)}; }
+  const fk=ease.expoInOut(clamp((t-FLY)/FLY_D)); if(fk>0){ D0={x:lerp(D0.x,SUN.x,fk),y:lerp(D0.y,SUN.y,fk),r:lerp(D0.r,SUN.r,fk)}; }
+  dotAt(dots[0],D0.x,D0.y,D0.r,op,sx,sy);
+  [1,2].forEach(j=>{ const vis=t>=B_SPLIT&&t<MERGE+0.45; const f=famPos[j]; dotAt(dots[j],f.x,f.y,f.r,vis?1:0); });
+
+  // stop labels: on the road beside their stop (scaled by the camera), then into the list
+  STOPS.forEach((s,i)=>{
+    const tin = i===5?LBL_IMP:STOP_T[i]-0.06; const w=OM.popIn(t,tin,{zeta:0.55,omega:20,rise:24});
+    const left = s.x<540; const wx = left? s.x+56 : s.x-56-LW[i]; const wy = s.y-34;
+    const [rx,ry]=proj(c,wx,wy); const [tx,ty]=proj(c,left?wx+84:wx+LW[i]-TW[i],s.y+48);
+    const m=ease.quintInOut(clamp((t-LIST-i*0.06)/LIST_D));
+    const lx=lerp(rx,150,m), ly=lerp(ry,ROWY(i)-34,m), ls=lerp(c.z,1,m)*w.s;
+    const gx=lerp(tx,930-TW[i],m), gy=lerp(ty,ROWY(i)-22,m);
+    let o = t<tin?0:w.op;
+    if(t>SCAN0-0.05 && t<G_OUT) o *= (i===row?1:0.32);
+    const out=OM.liftOut(t,G_OUT+i*0.03,{dist:40,blur:0}); o*=out.op;
+    put(s.el,lx,ly+w.dy*c.z+out.dy,ls,o); put(s.tag,gx,gy+w.dy*c.z+out.dy,lerp(c.z,1,m),o);
+  });
+  // list header → question
+  { const w=OM.wordRise(t,LIST+0.35), o=OM.liftOut(t,Q_IN-0.2,{dist:40,blur:0}); put($('e1'),150,470+w.y+o.dy,1,t<LIST+0.35?0:w.op*o.op);
+    const w2=OM.wordRise(t,LIST+0.5); put($('e2'),150,565+w2.y+o.dy,1,t<LIST+0.5?0:w2.op*o.op); }
+  { const w=OM.wordRise(t,Q_IN), o=OM.liftOut(t,G_OUT,{dist:40,blur:0}); put($('f1'),150,400+w.y+o.dy,1,t<Q_IN?0:w.op*o.op); }
+  // G · logo lockup grows around the landed sun
+  { const k=spring(t-LOGO_IN,0.6,12); const s=0.94+0.06*k; const op=clamp((t-LOGO_IN)/0.3,0,1);
+    const L=$('logo'); L.style.opacity=op; L.style.transform=`translate(${(SUN.x-(SUN.x-LOGO_X)*s).toFixed(1)}px,${(SUN.y-(SUN.y-LOGO_Y)*s).toFixed(1)}px) scale(${(s*LS*1254/900).toFixed(4)})`;
+    dots[0].style.opacity = t>LOGO_IN+0.3?0:dots[0].style.opacity;
+    const w=OM.wordRise(t,G_IN+0.25); put($('g1'),0,1210+w.y,1,t<G_IN+0.25?0:w.op); }
+  // captions
+  { const cp=CAPS.find(([a,b])=>t>=a&&t<b); const el=$('cap'); if(cp&&cp[2]){ el.textContent=cp[2]; const w=OM.wordRise(t,cp[0],{dist:14}); el.style.opacity=w.op*(1-sstep(cp[1]-0.12,cp[1],t)); el.style.transform=`translateY(${w.y}px)`; } else el.style.opacity=0; }
+  $('hud').textContent='t='+t.toFixed(2);
+}
+window.__events=()=>[
+  ['pop',DOT_IN],['land',A[2]+0.12],['split',B_SPLIT],['merge',MERGE],
+  ...STOP_T.map((tt,i)=>['stop',tt,i]),['hop',HOP],['thud',HOP_LAND],['whoosh',ZOOM],['list',LIST],
+  ...[0,1,2,3,4,5].map(i=>['tick',SCAN0+i*SCAN_DT,i]),['fly',FLY],['home',FLY+FLY_D]];
+window.__seek=async t=>{ seek(t); return true; };
+window.__ready=document.fonts.ready.then(()=>new Promise(r=>{const im=$('logo'); if(im.complete) r(); else im.onload=r;})).then(()=>{
+  buildRoad();
+  STOPS.forEach((s,i)=>{ s.el.style.transform='none'; LW[i]=s.el.getBoundingClientRect().width; TW[i]=s.tag.getBoundingClientRect().width; });
+  seek(0); });
+const q=new URLSearchParams(location.search);
+if(q.has('t')) __ready.then(()=>seek(parseFloat(q.get('t'))));
+if(q.has('hud')) $('hud').style.display='block';
+if(q.has('play')) __ready.then(()=>{const t0=performance.now();(function loop(){seek(((performance.now()-t0)/1000)%DUR);requestAnimationFrame(loop);})();});
+</script>
+</body>
+</html>
