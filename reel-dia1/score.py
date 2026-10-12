@@ -6,7 +6,7 @@ import os
 with sync_playwright() as p:
     b=p.chromium.launch(); pg=b.new_page(viewport={'width':1080,'height':1920})
     pg.goto('file://'+os.path.abspath('comp.html')); pg.evaluate('window.__ready'); ev=pg.evaluate('window.__events()'); b.close()
-DUR=25.0
+DUR=27.0
 s=Score(dur=DUR)
 notes=[392,440,494,523,587,659]
 for e in ev:
@@ -25,7 +25,10 @@ for e in ev:
     elif k=='home': s.place(glass(784,1.4,0.7),t=t,gain=0.16,send=0.6); s.place(sub(62,0.8),t=t,gain=0.4)
 s.write('sfx.wav')
 # mix: VO (take c) delayed 0.4 s over the sfx, loudness-normalised
-subprocess.run(['ffmpeg','-y','-loglevel','error','-i','vo/c.mp3','-i','sfx.wav','-filter_complex',
-  '[0:a]aresample=48000,adelay=400|400,apad,volume=1.0[v];[1:a]volume=0.55[s];[v][s]amix=inputs=2:duration=longest:normalize=0,atrim=0:25,loudnorm=I=-16:TP=-4:LRA=11,aresample=48000[o]',
+subprocess.run(['ffmpeg','-y','-loglevel','error','-i','vo/c.mp3','-filter_complex',
+  '[0:a]aresample=48000,asplit[a0][a1];[a0]atrim=0:19.7,adelay=400|400[p1];[a1]atrim=start=19.7,asetpts=PTS-STARTPTS,adelay=22100|22100[p2];[p1][p2]amix=inputs=2:duration=longest:normalize=0[o]',
+  '-map','[o]','-ac','2','vo_track.wav'],check=True)
+subprocess.run(['ffmpeg','-y','-loglevel','error','-i','vo_track.wav','-i','sfx.wav','-filter_complex',
+  '[1:a]volume=0.55[s];[0:a][s]amix=inputs=2:duration=longest:normalize=0,atrim=0:27,loudnorm=I=-16:TP=-4:LRA=11,aresample=48000[o]',
   '-map','[o]','-ac','2','mix.wav'],check=True)
 print(len(ev),'events')

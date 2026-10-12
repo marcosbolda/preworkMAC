@@ -21,6 +21,11 @@ body{font-family:'Q',system-ui,sans-serif;color:var(--ink);font-weight:700}
 #g1{font-size:54px;font-weight:700}
 .lab{display:flex;align-items:center;gap:18px;font-size:68px;line-height:1;transform-origin:0 50%}
 .lab svg{width:66px;height:66px;flex:none}
+.num{font-size:40px;font-weight:700;color:var(--ink)}
+.colh{font-size:30px;font-weight:600;color:var(--mute)}
+#tot{font-size:46px}
+#tot .lab2{font-size:46px}
+.rule{position:absolute;left:0;top:0;height:4px;width:930px;background:var(--ink);border-radius:2px;transform-origin:0 50%}
 .tag{font-size:40px;font-weight:600;color:var(--mute);transform-origin:0 0}
 .dot{position:absolute;left:0;top:0;width:100px;height:100px;margin:-50px 0 0 -50px;border-radius:50%;background:var(--ink);will-change:transform}
 #cap{font-size:44px;font-weight:600;line-height:1.2;white-space:normal;padding:0 90px}
@@ -47,13 +52,17 @@ body{font-family:'Q',system-ui,sans-serif;color:var(--ink);font-weight:700}
   <div id="c1" class="abs ctr h1" style="top:560px">vamos por partes</div>
   <!-- E/F · list -->
   <div id="e1" class="abs h1">tu planilla</div>
-  <div id="e2" class="abs tag">londres · 2 adultos + 1 chico</div>
+  <div id="e2" class="abs tag">londres · 7 noches · 2 adultos + 1 chico</div>
+  <div id="hLo" class="abs colh">temp. baja</div><div id="hHi" class="abs colh">temp. alta</div>
+  <div id="rule" class="rule"></div>
+  <div id="tW" class="abs num" style="font-size:48px">total aprox.</div><div id="tLo" class="abs num" style="font-size:42px">US$ 8.700</div><div id="tHi" class="abs num" style="font-size:42px">US$ 13.900</div>
+  <div id="note" class="abs tag" style="font-size:30px">valores aproximados en US$ · oct 2026 · verificá antes de viajar</div>
   <div id="f1" class="abs h1" style="line-height:1.1">¿qué gasto te<br>preocupa más?</div>
   <div id="labs"></div>
 
   <img id="logo" src="logo.png" alt="">
   <div id="g1" class="abs ctr small">contanos en los comentarios</div>
-  <div id="cap" class="abs ctr" style="top:1470px"></div>
+  <div id="cap" class="abs ctr" style="top:1520px"></div>
   <div id="dots"></div>
   <div id="hud"></div>
 </div>
@@ -63,9 +72,9 @@ body{font-family:'Q',system-ui,sans-serif;color:var(--ink);font-weight:700}
 // rejoins, rolls down the logo's winding road through six costs, becomes the list's selector, and lands
 // back in the logo as its sun. Everything is a pure function of t. VO (ElevenLabs, take c) starts at VO_OFF.
 const {clamp, lerp, sstep, ssstep, spring, ease} = OM;
-const DUR=25.0, VO_OFF=0.4;
+const DUR=27.0, VO_OFF=0.4, GAP_AT=19.7, GAP=2.0;
 window.__meta={dur:DUR,fps:30,w:1080,h:1920,inFrame:[]};
-const v=s=>s+VO_OFF;                                     // VO timestamps (silencedetect on take c) → film time
+const v=s=>s+VO_OFF+(s>=GAP_AT?GAP:0);                                     // VO timestamps (silencedetect on take c) → film time
 
 // beats
 const DOT_IN=0.15, A=[v(0.0),v(0.62),v(1.15),v(2.05)], A_OUT=v(3.35);
@@ -77,12 +86,12 @@ const ZOOM=v(14.1), ZOOM_D=1.25, LIST=v(15.5), LIST_D=0.75;
 const Q_IN=v(19.87), SCAN0=v(20.05), SCAN_DT=0.17, G_OUT=v(21.3), FLY=v(21.39), FLY_D=0.62, LOGO_IN=v(21.39)+0.5, G_IN=v(21.6);
 
 const STOPS=[
-  {x:290,y:1450,w:'pasajes',      icon:'plane'},
-  {x:790,y:1900,w:'alojamiento',  icon:'house'},
-  {x:290,y:2350,w:'comida',       icon:'food'},
-  {x:790,y:2800,w:'transporte',   icon:'bus'},
-  {x:290,y:3250,w:'actividades',  icon:'eye'},
-  {x:640,y:3700,w:'imprevistos',  icon:'umb'},
+  {x:290,y:1450,w:'pasajes',      icon:'plane', lo:'3.900', hi:'6.900'},
+  {x:790,y:1900,w:'alojamiento',  icon:'house', lo:'2.200', hi:'3.500'},
+  {x:290,y:2350,w:'comida',       icon:'food',  lo:'1.250', hi:'1.600'},
+  {x:790,y:2800,w:'transporte',   icon:'bus',   lo:'200',   hi:'200'},
+  {x:290,y:3250,w:'actividades',  icon:'eye',   lo:'350',   hi:'450'},
+  {x:640,y:3700,w:'imprevistos',  icon:'umb',   lo:'800',   hi:'1.250'},
 ];
 const P0={x:540,y:1000}, PEND={x:540,y:4060};
 const CAPS=[[v(3.57),v(4.96),'dos adultos y un chico.'],[v(5.77),v(6.59),''],
@@ -107,7 +116,9 @@ const lonL=[...'londres'].map(ch=>{const s=document.createElement('span');s.text
 // stop labels + tags
 STOPS.forEach((s,i)=>{
   const d=document.createElement('div'); d.className='abs lab'; d.innerHTML=`<svg viewBox="0 0 64 64" fill="currentColor">${ICONS[s.icon]}</svg><span>${s.w}</span>`; $('labs').appendChild(d); s.el=d;
-  const g=document.createElement('div'); g.className='abs tag'; g.textContent='£ ?'; $('labs').appendChild(g); s.tag=g;
+  const g=document.createElement('div'); g.className='abs tag'; g.textContent=s.lo===s.hi?`US$ ${s.lo}`:`US$ ${s.lo} – ${s.hi}`; $('labs').appendChild(g); s.tag=g;
+  const a=document.createElement('div'); a.className='abs num'; a.textContent='US$ '+s.lo; $('labs').appendChild(a); s.nLo=a;
+  const b=document.createElement('div'); b.className='abs num'; b.textContent='US$ '+s.hi; $('labs').appendChild(b); s.nHi=b;
 });
 // four dots: 0 = the sun (always the subject), 1 = second adult, 2 = child
 const dots=[0,1,2].map(()=>{const d=document.createElement('div');d.className='dot';$('dots').appendChild(d);return d;});
@@ -152,7 +163,7 @@ function put(el,x,y,s=1,op=1,sx=1,sy=1){ el.style.opacity=op; el.style.transform
 function dotAt(el,x,y,r,op=1,sx=1,sy=1){ el.style.opacity=op; el.style.transform=`translate(${x.toFixed(1)}px,${y.toFixed(1)}px) scale(${(r/50*sx).toFixed(4)},${(r/50*sy).toFixed(4)})`; }
 function fadeWord(el,t,t0,t1,y0){ const w=OM.wordRise(t,t0), o=OM.liftOut(t,t1,{dist:50,blur:0}); el.style.opacity=t<t0?0:w.op*o.op; el.style.transform=`translateY(${(y0||0)+w.y+o.dy}px) scale(${w.s})`; }
 
-let LW=[], TW=[];
+let LW=[], TW=[], NW=[], HW=[], TOTW=[];
 function seek(t){
   const c=cam(t);
   // road layer
@@ -191,11 +202,11 @@ function seek(t){
     const im=OM.impact(t,HOP_LAND,{sqx:0.22,sqy:0.28}); sx=im.sx; sy=im.sy;
     STOP_T.forEach(tt=>{ const k=OM.impact(t,tt,{sqx:0.12,sqy:0.15,decay:9}); sx*=k.sx; sy*=k.sy; }); }
   // list: the sun becomes the row selector; then the question scans; then it flies home to the logo
-  const ROWY=i=>720+i*128;
+  const ROWY=i=>720+i*108, LX=75, CLO=770, CHI=1005, LIST_S=0.8;
   const lk=ease.cubicInOut(clamp((t-(LIST+0.25))/0.6));
   let row=0; if(t>SCAN0){ row=Math.min(5,Math.floor((t-SCAN0)/SCAN_DT)); }
   let selY=ROWY(0); if(t>SCAN0){ const i=Math.min(5,Math.floor((t-SCAN0)/SCAN_DT)); const u=ease.expoOut(clamp((t-SCAN0-i*SCAN_DT)/0.12)); selY=lerp(ROWY(Math.max(0,i-1)),ROWY(i),i===0?1:u); }
-  if(lk>0){ D0={x:lerp(D0.x,92,lk),y:lerp(D0.y,selY,lk),r:lerp(D0.r,15,lk)}; }
+  if(lk>0){ D0={x:lerp(D0.x,42,lk),y:lerp(D0.y,selY,lk),r:lerp(D0.r,15,lk)}; }
   const fk=ease.expoInOut(clamp((t-FLY)/FLY_D)); if(fk>0){ D0={x:lerp(D0.x,SUN.x,fk),y:lerp(D0.y,SUN.y,fk),r:lerp(D0.r,SUN.r,fk)}; }
   dotAt(dots[0],D0.x,D0.y,D0.r,op,sx,sy);
   [1,2].forEach(j=>{ const vis=t>=B_SPLIT&&t<MERGE+0.45; const f=famPos[j]; dotAt(dots[j],f.x,f.y,f.r,vis?1:0); });
@@ -206,17 +217,27 @@ function seek(t){
     const left = s.x<540; const wx = left? s.x+56 : s.x-56-LW[i]; const wy = s.y-34;
     const [rx,ry]=proj(c,wx,wy); const [tx,ty]=proj(c,left?wx+84:wx+LW[i]-TW[i],s.y+48);
     const m=ease.quintInOut(clamp((t-LIST-i*0.06)/LIST_D));
-    const lx=lerp(rx,150,m), ly=lerp(ry,ROWY(i)-34,m), ls=lerp(c.z,1,m)*w.s;
-    const gx=lerp(tx,930-TW[i],m), gy=lerp(ty,ROWY(i)-22,m);
+    const lx=lerp(rx,LX,m), ly=lerp(ry,ROWY(i)-34*LIST_S,m), ls=lerp(c.z,LIST_S,m)*w.s;
+    const gx=tx, gy=ty;
     let o = t<tin?0:w.op;
     if(t>SCAN0-0.05 && t<G_OUT) o *= (i===row?1:0.32);
     const out=OM.liftOut(t,G_OUT+i*0.03,{dist:40,blur:0}); o*=out.op;
-    put(s.el,lx,ly+w.dy*c.z+out.dy,ls,o); put(s.tag,gx,gy+w.dy*c.z+out.dy,lerp(c.z,1,m),o);
+    put(s.el,lx,ly+w.dy*c.z+out.dy,ls,o);
+    // road: one "US$ lo – hi" tag; list: it hands over to two columns
+    const hm=clamp(m*2.2-0.2,0,1); put(s.tag,gx,gy+w.dy*c.z+out.dy-hm*20,c.z,o*(1-hm));
+    put(s.nLo,lerp(gx,CLO-NW[i][0],m),lerp(gy,ROWY(i)-22,m)+out.dy,lerp(c.z,1,m),o*hm);
+    put(s.nHi,lerp(gx+NW[i][0]*c.z,CHI-NW[i][1],m),lerp(gy,ROWY(i)-22,m)+out.dy,lerp(c.z,1,m),o*hm);
   });
   // list header → question
-  { const w=OM.wordRise(t,LIST+0.35), o=OM.liftOut(t,Q_IN-0.2,{dist:40,blur:0}); put($('e1'),150,470+w.y+o.dy,1,t<LIST+0.35?0:w.op*o.op);
-    const w2=OM.wordRise(t,LIST+0.5); put($('e2'),150,565+w2.y+o.dy,1,t<LIST+0.5?0:w2.op*o.op); }
-  { const w=OM.wordRise(t,Q_IN), o=OM.liftOut(t,G_OUT,{dist:40,blur:0}); put($('f1'),150,400+w.y+o.dy,1,t<Q_IN?0:w.op*o.op); }
+  { const w=OM.wordRise(t,LIST+0.35), o=OM.liftOut(t,Q_IN-0.2,{dist:40,blur:0}); put($('e1'),LX,440+w.y+o.dy,1,t<LIST+0.35?0:w.op*o.op);
+    const w2=OM.wordRise(t,LIST+0.5); put($('e2'),LX,535+w2.y+o.dy,1,t<LIST+0.5?0:w2.op*o.op); }
+  { const o=OM.liftOut(t,G_OUT+0.1,{dist:40,blur:0}); const w=OM.wordRise(t,LIST+0.7); const op=t<LIST+0.7?0:w.op*o.op;
+    put($('hLo'),CLO-HW[0],625+w.y+o.dy,1,op); put($('hHi'),CHI-HW[1],625+w.y+o.dy,1,op);
+    const tt=LIST+1.0, rk=ease.expoOut(clamp((t-tt)/0.5)); $('rule').style.opacity=t<tt?0:o.op; $('rule').style.transform=`translate(${LX}px,${ROWY(6)-50+o.dy}px) scaleX(${rk.toFixed(3)})`;
+    const w3=OM.wordRise(t,tt+0.15), op3=t<tt+0.15?0:w3.op*o.op;
+    put($('tW'),LX,ROWY(6)-28+w3.y+o.dy,1,op3); put($('tLo'),CLO-TOTW[0],ROWY(6)-22+w3.y+o.dy,1,op3); put($('tHi'),CHI-TOTW[1],ROWY(6)-22+w3.y+o.dy,1,op3);
+    const w4=OM.wordRise(t,tt+0.4); put($('note'),LX,ROWY(6)+58+w4.y+o.dy,1,t<tt+0.4?0:w4.op*o.op); }
+  { const w=OM.wordRise(t,Q_IN), o=OM.liftOut(t,G_OUT,{dist:40,blur:0}); put($('f1'),LX,420+w.y+o.dy,1,t<Q_IN?0:w.op*o.op); }
   // G · logo lockup grows around the landed sun
   { const k=spring(t-LOGO_IN,0.6,12); const s=0.94+0.06*k; const op=clamp((t-LOGO_IN)/0.3,0,1);
     const L=$('logo'); L.style.opacity=op; L.style.transform=`translate(${(SUN.x-(SUN.x-LOGO_X)*s).toFixed(1)}px,${(SUN.y-(SUN.y-LOGO_Y)*s).toFixed(1)}px) scale(${(s*LS*1254/900).toFixed(4)})`;
@@ -233,7 +254,9 @@ window.__events=()=>[
 window.__seek=async t=>{ seek(t); return true; };
 window.__ready=document.fonts.ready.then(()=>new Promise(r=>{const im=$('logo'); if(im.complete) r(); else im.onload=r;})).then(()=>{
   buildRoad();
-  STOPS.forEach((s,i)=>{ s.el.style.transform='none'; LW[i]=s.el.getBoundingClientRect().width; TW[i]=s.tag.getBoundingClientRect().width; });
+  const wd=el=>{el.style.transform='none'; return el.getBoundingClientRect().width;};
+  STOPS.forEach((s,i)=>{ LW[i]=wd(s.el); TW[i]=wd(s.tag); NW[i]=[wd(s.nLo),wd(s.nHi)]; });
+  HW=[wd($('hLo')),wd($('hHi'))]; TOTW=[wd($('tLo')),wd($('tHi'))];
   seek(0); });
 const q=new URLSearchParams(location.search);
 if(q.has('t')) __ready.then(()=>seek(parseFloat(q.get('t'))));
