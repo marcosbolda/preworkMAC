@@ -52,7 +52,7 @@ body{font-family:'Q',system-ui,sans-serif;color:var(--ink);font-weight:700}
   <div id="c1" class="abs ctr h1" style="top:560px">vamos por partes</div>
   <!-- E/F · list -->
   <div id="e1" class="abs h1">tu planilla</div>
-  <div id="e2" class="abs tag">londres · 7 noches · 2 adultos + 1 chico</div>
+  <div id="e2" class="abs tag">Londres · 7 noches · 2 adultos + 1 chico</div>
   <div id="hLo" class="abs colh">temp. baja</div><div id="hHi" class="abs colh">temp. alta</div>
   <div id="rule" class="rule"></div>
   <div id="tW" class="abs num" style="font-size:48px">total aprox.</div><div id="tLo" class="abs num" style="font-size:42px">US$ 8.700</div><div id="tHi" class="abs num" style="font-size:42px">US$ 13.900</div>
@@ -112,7 +112,7 @@ const ICONS={
 
 const $=id=>document.getElementById(id);
 // hook word "londres" as letters
-const lonL=[...'londres'].map(ch=>{const s=document.createElement('span');s.textContent=ch;$('lon').appendChild(s);return s;});
+const lonL=[...'Londres'].map(ch=>{const s=document.createElement('span');s.textContent=ch;$('lon').appendChild(s);return s;});
 // stop labels + tags
 STOPS.forEach((s,i)=>{
   const d=document.createElement('div'); d.className='abs lab'; d.innerHTML=`<svg viewBox="0 0 64 64" fill="currentColor">${ICONS[s.icon]}</svg><span>${s.w}</span>`; $('labs').appendChild(d); s.el=d;
