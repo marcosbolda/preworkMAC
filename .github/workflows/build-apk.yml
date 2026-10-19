@@ -7,6 +7,9 @@ on:
       - ".github/workflows/build-apk.yml"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -25,8 +28,19 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk OcultarNotificaciones.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: OcultarNotificaciones-apk
-          path: ocultar-notificaciones/app/build/outputs/apk/debug/app-debug.apk
+          path: ocultar-notificaciones/OcultarNotificaciones.apk
+
+      # Publica el APK como Release para tener un link de descarga directo (sirve desde el celular).
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-build-${{ github.run_number }}
+          name: Ocultar Notificaciones (build ${{ github.run_number }})
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          body: Descargá **OcultarNotificaciones.apk** desde "Assets" e instalalo en el celular.
+          files: ocultar-notificaciones/OcultarNotificaciones.apk
