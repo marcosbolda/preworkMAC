@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ocultar Notificaciones</string>
+    <string name="tile_label">Ocultar notif.</string>
+    <string name="master_switch">Ocultar notificaciones</string>
+    <string name="permission_missing">Falta el permiso de acceso a notificaciones. Sin él la app no puede ocultar nada.</string>
+    <string name="permission_ok">Permiso de acceso a notificaciones concedido ✓</string>
+    <string name="grant_permission">Dar permiso</string>
+    <string name="restricted_hint">Si el permiso aparece bloqueado (Android 13+): Ajustes → Apps → Ocultar Notificaciones → menú ⋮ → \"Permitir ajustes restringidos\", y volvé a intentar.</string>
+    <string name="search_hint">Buscar app…</string>
+    <string name="pick_apps">Elegí las apps a silenciar:</string>
+    <string name="hidden_count">Notificaciones ocultadas: %1$d</string>
+    <string name="status_on">ACTIVO: ocultando %1$d app(s)</string>
+    <string name="status_off">Inactivo: las notificaciones se muestran normalmente</string>
+</resources>
